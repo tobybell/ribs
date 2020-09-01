@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 36 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <rect id="SidebarDownloadsFolder" x="0" y="0" width="36" height="36" style="fill:none;"/>
+    <clipPath id="_clip1">
+        <rect x="0" y="0" width="36" height="36"/>
+    </clipPath>
+    <g clip-path="url(#_clip1)">
+        <path d="M18,0C27.934,0 36,8.066 36,18C36,27.934 27.934,36 18,36C8.066,36 0,27.934 0,18C0,8.066 8.066,0 18,0ZM18,2C26.831,2 34,9.169 34,18C34,26.831 26.831,34 18,34C9.169,34 2,26.831 2,18C2,9.169 9.169,2 18,2Z"/>
+        <path d="M18,2C26.831,2 34,9.169 34,18C34,26.831 26.831,34 18,34C9.169,34 2,26.831 2,18C2,9.169 9.169,2 18,2ZM14,8L22,8L22,18L28,18L18,29L8,18L14,18L14,8Z" style="fill-opacity:0.9;"/>
+        <path d="M12,16L12,8C12,6.895 12.895,6 14,6L22,6C23.105,6 24,6.895 24,8L24,16L28,16C28.792,16 29.509,16.467 29.829,17.191C30.149,17.915 30.012,18.76 29.48,19.345L19.48,30.345C19.101,30.762 18.563,31 18,31C17.437,31 16.899,30.762 16.52,30.345L6.52,19.345C5.988,18.76 5.851,17.915 6.171,17.191C6.491,16.467 7.208,16 8,16L12,16ZM14,8L22,8L22,18L28,18L18,29L8,18L14,18L14,8Z"/>
+    </g>
+</svg>
