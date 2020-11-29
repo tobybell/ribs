@@ -1,4 +1,5 @@
-import { xor } from "lodash";
+import { ticks, scaleLinear } from 'd3';
+import { remove, xor } from 'lodash';
 
 export {};
 
@@ -48,12 +49,56 @@ const reduceMulti = <A, T extends any[]>(ss: {[K in keyof T]: ReducePair<A, T[K]
   };
 };
 
+/** Create a pull stream that counts up from 0. */
+const counter = () => {
+  let x = -1;
+  return () => {
+    x += 1;
+    return x;
+  };
+}
+
 /**
  * Union multiple streams.
  */
 const merge = <T extends Stream<any>[]>(...ss: T): Stream<{[K in keyof T]: Contents<T[K]>}[number]> => h => {
-  const us = ss.map(s => s(h));
-  return () => us.forEach(u => u());
+  return cleanup(ss.map(s => s(h)));
+};
+
+const filterSame = <T>(s: Stream<T>): Stream<T> => h => {
+  let last: any = undefined;
+  return s(x => {
+    if (x !== last) h(x);
+    last = x;
+  });
+};
+
+/** Number of streams returning true. */
+const countTrue = (streams: Stream<boolean>[]): Stream<number> => {
+  const n = streams.length;
+  return h => {
+    const values = Array(n);
+    let m = 0;
+    return cleanup(streams.map((s, i) => s(x => {
+      if (x && !values[i]) {
+        m += 1;
+      } else if (!x && values[i]) {
+        m -= 1;
+      }
+      values[i] = x;
+      h(m);
+    })));
+  };
+}
+
+/** If any of the streams evaluate to true. */
+const any = (streams: Stream<boolean>[]) =>
+  filterSame(map(countTrue(streams), x => x != 0));
+
+/** If all of the streams evaluate to true. */
+const streamAll = (streams: Stream<boolean>[]) => {
+  const n = streams.length;
+  return filterSame(map(countTrue(streams), x => x === n));
 };
 
 /**
@@ -72,6 +117,30 @@ const join = <T extends readonly any[]>(ss: {[K in keyof T]: Stream<T[K]>}): Str
       if (!rs[i]) {
         nRemaining -= 1;
         rs[i] = true;
+      }
+      if (!nRemaining) h(cs);
+    }));
+    return () => us.forEach(u => u());
+  };
+};
+
+
+/**
+ * Join an object of streams into a stream of objects.
+ *
+ * TODO: I want a better API for this.
+ */
+const joinObj = <T extends {}>(streams: {[K in keyof T]: Stream<T[K]>}): Stream<{[K in keyof T]: T[K]}> => {
+  const keys = Object.keys(streams) as any as (keyof T)[];
+  return h => {
+    let nRemaining = keys.length;
+    const rs = {} as {[K in keyof T]?: boolean};
+    const cs = {} as {[K in keyof T]: T[K]};
+    const us = keys.map(k => streams[k](x => {
+      cs[k] = x;
+      if (!rs[k]) {
+        nRemaining -= 1;
+        rs[k] = true;
       }
       if (!nRemaining) h(cs);
     }));
@@ -100,7 +169,15 @@ function useState<T>(initial: T): [Stream<T>, Handler<T>] {
   return [state, setState];
 }
 
-function useStream<T>(): [Stream<T>, Handler<T>] {
+function useEnabler(): [Stream<boolean>, () => Cleanup] {
+  const [values, set] = useState(false);
+  return [values, () => {
+    set(true);
+    return () => set(false);
+  }];
+}
+
+function useStream<T = void>(): [Stream<T>, Handler<T>] {
   let handlers = new Set<Handler<T>>();
   const stream: Stream<T> = (h: Handler<T>) => {
     handlers.add(h);
@@ -129,19 +206,34 @@ interface FrameHandles {
   middle: Handler<MouseEvent>;
 }
 
-// TODO: Componentize.
-function windowFrame(frame: Stream<Frame>, resize: FrameHandles, content: Component): Component {
+interface WindowControls {
+  close(e: void): void;
+  minimize(): void;
+  maximize(): void;
+  focus(): void;
+  handles: FrameHandles;
+}
+
+function cleanup(debts: Unsubscriber[]) {
+  return () => debts.forEach(x => x());
+}
+
+function windowFrame(frame: Stream<Frame>, zIndex: Stream<number>, resize: FrameHandles, content: Component): Component {
   return r => {
+    const debts = [];
     const div = document.createElement('div');
     const style = div.style;
     style.position = 'absolute';
-    frame(f => {
+    debts.push(frame(f => {
       style.left = `${f.x}px`;
       style.top = `${f.y}px`;
       style.width = `${f.width}px`;
       style.height = `${f.height}px`;
-    });
-    render(content, div);
+    }));
+    debts.push(zIndex(i => {
+      style.zIndex = `${i}`;
+    }));
+    debts.push(render(content, div));
     div.appendChild(topDragger(resize.top));
     div.appendChild(topLeftDragger(resize.topLeft));
     div.appendChild(topRightDragger(resize.topRight));
@@ -151,24 +243,44 @@ function windowFrame(frame: Stream<Frame>, resize: FrameHandles, content: Compon
     div.appendChild(leftDragger(resize.left));
     div.appendChild(rightDragger(resize.right));
 
-    return mount(div, r);
+    debts.push(mount(div, r));
+
+    return cleanup(debts);
   };
 }
 
-function finder(frame: Stream<Frame>, expanded: Stream<boolean>, setExpanded: any, h: FrameHandles) {
-  const content = Div({
-    // backgroundColor: '#1f1f20',
-    backgroundColor: '#323334',
-    borderRadius: '5px',
-    overflow: 'hidden',
-    boxSizing: 'border-box',
-    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7)',
-    display: 'flex',
-    flexFlow: 'column nowrap',
-    width: '100%',
-    height: '100%',
-  }, [
-    menuBar(h.middle),
+const WindowPane = (content?: ElementThing[], effects?: Effect[]) => Div({
+  backgroundColor: '#323334',
+  borderRadius: '5px',
+  overflow: 'hidden',
+  transform: 'translateZ(0)',
+  boxSizing: 'border-box',
+  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7)',
+  display: 'flex',
+  flexFlow: 'column nowrap',
+  width: '100%',
+  height: '100%',
+}, content, effects);
+
+const SimpleWindow = (title: string, content: Component): Window => (c: WindowControls) => {
+  const pane = WindowPane([
+    simpleTitleBar(title, c.handles.middle, c.close),
+    content,
+    borderOverlay,
+  ]);
+  return pane;
+};
+
+const Finder: Window = (c: WindowControls) => {
+  const [expanded, setExpanded] = useState(false);
+  return finder(expanded, setExpanded, c);
+};
+
+const rsquare = () => square(Math.random());
+
+function finder(expanded: Stream<boolean>, setExpanded: any, c: WindowControls) {
+  const content = WindowPane([
+    menuBar(c.handles.middle, c.close),
     Div({
       flex: '1 0 0',
       position: 'relative',
@@ -177,10 +289,10 @@ function finder(frame: Stream<Frame>, expanded: Stream<boolean>, setExpanded: an
     }, [
       sidebar(expanded, setExpanded),
       Div({}, [
-        radio(square(Math.random())),
+        radio(rsquare()),
         radio(just(false)),
         radio(just(false)),
-        checkbox(square(Math.random())),
+        checkbox(rsquare()),
         checkbox(just(true)),
         select('Medium'),
       ]),
@@ -188,7 +300,7 @@ function finder(frame: Stream<Frame>, expanded: Stream<boolean>, setExpanded: an
     borderOverlay,
   ], [
     ContextMenu(menu([
-      menuItem('Back', true),
+      menuItem('Back'),
       menuItem('Reload Page'),
       menuSeparator(),
       menuItem('Show Page Source'),
@@ -198,15 +310,18 @@ function finder(frame: Stream<Frame>, expanded: Stream<boolean>, setExpanded: an
       menuItem('Inspect Element'),
     ])),
   ]);
-  const frameView = windowFrame(frame, h, content);
-  return frameView;
+  return content;
 }
 
 type ElementThing = HTMLElement | SVGSVGElement | Component | string | undefined;
 type StreamableCSS = {[K in keyof CSSStyleDeclaration]: string | Stream<string>};
 
-function elem<K extends keyof HTMLElementTagNameMap>(s: K) {
-  return document.createElement(s);
+function elem<K extends keyof HTMLElementTagNameMap>(s: K, p?: HTMLElement) {
+  const e = document.createElement(s);
+  if (p) {
+    p.appendChild(e);
+  }
+  return e;
 }
 
 function marker() {
@@ -214,7 +329,7 @@ function marker() {
 }
 
 /** Render a component into a container. */
-function render(c: Component, p: HTMLElement) {
+function render(c: Component, p: Node) {
   return c(p.appendChild(marker()));
 }
 
@@ -225,6 +340,8 @@ const Div = (
 ): Component => r => {
   const t = elem('div');
 
+  const us = [];
+
   // Style bits.
   const keys = Object.keys(style) as (keyof CSSStyleDeclaration)[];
   const estyle = t.style as any;
@@ -233,8 +350,7 @@ const Div = (
     if (typeof v === 'string') {
       estyle[k] = v;
     } else if (v) {
-      // TODO: Unsubscription
-      v(x => estyle[k] = x);
+      us.push(v(x => estyle[k] = x));
     }
   });
 
@@ -246,16 +362,205 @@ const Div = (
       t.appendChild(document.createTextNode(x));
     } else {
       // TODO: Figure out how unsubscription should work.
-      const u = render(x, t);
+      us.push(render(x, t));
     }
   });
 
   // TODO: Use this.
-  const cleanups = effects?.map(f => f(t)) || [];
+  if (effects) {
+    us.push(...effects.map(f => f(t)));
+  }
 
-  return mount(t, r);
+  us.push(mount(t, r));
+
+  return cleanup(us);
 };
 
+type Limits = [number, number];
+type RectSize = [number, number]; // width, height
+
+
+// Things to be able to plot:
+// - Fixed known data.
+// - Stream of incoming data in order.
+// - Big known data but which we might need to fetch one piece at a time.
+//
+// "Data provider."
+// A data provider needs a way for the plot to tell it what regions of data
+// it's interested in, and a way for it to give the plot that data.
+
+const Plot2D = (
+  xlim: Stream<Limits>,
+  ylim: Stream<Limits>,
+): Component => r => {
+  const container = elem('div');
+  const canvas = elem('canvas');
+  container.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+
+  const [size, setSize] = useState<RectSize>([0, 0]);
+
+  let y = Math.random();
+  const N = 1000;
+  const data = [y];
+  for (let i = 0; i < N; i += 1) {
+    y += .05 * Math.random() - .025;
+    data.push(y);
+  }
+
+  const o = new ResizeObserver(entries => {
+    const entry = entries[entries.length - 1];
+    if (entry) {
+      const { width, height } = entry.contentRect;
+      setSize([Math.floor(width), Math.floor(height)]);
+    }
+  });
+
+  container.style.width = '100%';
+  container.style.height = '100%';
+  container.style.position = 'relative';
+  o.observe(container);
+
+  const title = just('Stock price');
+  const xLabel = just('Time [d]');
+  const yLabel = just('Price [$]');
+
+  const tickLength = 5;
+  const axisPad = 4;
+
+  const tickFont = "10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif";
+  const labelFont = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif";
+  const titleFont = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif";
+
+  canvas.style.width = '200px';
+  canvas.style.height = '200px';
+  canvas.style.position = 'absolute';
+  canvas.style.top = '0';
+  canvas.style.left = '0';
+
+  const cleanups = [];
+
+  if (ctx) {
+    cleanups.push(size(([w, h]) => {
+      canvas.width = w * 2;
+      canvas.height = h * 2;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.scale(2, 2);
+    }));
+
+    const axisConfig = joinObj({ size, xlim, ylim, xLabel, yLabel, title });
+
+    interface AxisConfig {
+      size: RectSize;
+      xlim: Limits;
+      ylim: Limits;
+      title?: string;
+      xLabel?: string;
+      yLabel?: string;
+    }
+
+    // Whenever width changes, need to compute a new left and right.
+    // Whenever height changes, 
+
+    const drawAxes = ({ xLabel, yLabel, title, size: [width, height], xlim: [xMin, xMax], ylim: [yMin, yMax] }: AxisConfig) => {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, width, height);
+
+      const top = title ? 25 : 10;
+      const bottom = height - (xLabel ? 38 : 18);
+      const yts = ticks(yMin, yMax, Math.abs(top - bottom) / 60);
+      ctx.font = tickFont;
+      const maxWidth = Math.ceil(Math.max(0, ...yts.map(t => ctx.measureText(`${t}`).width)));
+      const left = maxWidth + (yLabel ? 25 : 9);
+      const right = width - 10;
+      const xMid = (left + right) / 2;
+      const yMid = (top + bottom) / 2;
+      const xts = ticks(xMin, xMax, Math.abs(right - left) / 60);
+      const xs = scaleLinear([left, right]).domain([xMin, xMax]);
+      const ys = scaleLinear([bottom, top]).domain([yMin, yMax]);
+      ctx.fillStyle = '#000';
+      ctx.lineWidth = 1;
+
+      // Draw x ticks.
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.beginPath();
+      for (const t of xts) {
+        const x = xs(t);
+        ctx.moveTo(x, bottom);
+        ctx.lineTo(x, bottom - tickLength);
+        ctx.fillText(`${t}`, x, bottom + 3);
+      }
+      ctx.stroke();
+      
+      // Draw y ticks.
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.beginPath();
+      for (const t of yts) {
+        const y = ys(t);
+        ctx.moveTo(left, y);
+        ctx.lineTo(left + tickLength, y);
+        ctx.fillText(`${t}`, left - axisPad, y);
+      }
+      ctx.stroke();
+
+      // Draw series
+      ctx.strokeStyle = '#2965CC';
+      ctx.beginPath();
+      ctx.moveTo(xs(0), ys(data[0]));
+      for (let i = 1; i <= N; i += 1) {
+        ctx.lineTo(xs(i / N), ys(data[i]));
+      }
+      ctx.stroke();
+
+      // Draw borders.
+      ctx.strokeStyle = '#000';
+      ctx.beginPath();
+      ctx.moveTo(left, top);
+      ctx.lineTo(right, top);
+      ctx.lineTo(right, bottom);
+      ctx.lineTo(left, bottom);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Draw x-label.
+      if (xLabel) {
+        ctx.font = labelFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(xLabel, xMid, height - 5);
+      }
+
+      // Draw title.
+      if (title) {
+        ctx.font = titleFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(title, xMid, 4);
+      }
+
+      // Draw y-label.
+      if (yLabel) {
+        ctx.font = labelFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.save();
+        ctx.translate(4, yMid);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(yLabel, 0, 0);
+        ctx.restore();
+      }
+    };
+
+    cleanups.push(axisConfig(drawAxes));
+
+  }
+
+  return mount(container, r);
+
+};
 
 const FillLayer = (
   style: Partial<StreamableCSS>,
@@ -363,25 +668,45 @@ const borderOverlay = Div({
   }),
 ]);
 
+const dropdownBorderOverlay = Div({
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  width: '100%',
+  height: '100%',
+  borderRadius: '0 0 5px 5px',
+  pointerEvents: 'none',
+}, [
+  Div({
+    width: '100%',
+    height: '100%',
+    border: '1px solid rgba(255, 255, 255, .15)',
+    borderRadius: '0 0 5px 5px',
+    borderTopWidth: '0',
+    boxSizing: 'border-box',
+  }),
+]);
+
 const windowTitle = (title: string) => Div({
   flex: '0 1 auto',
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   color: '#b7b7ba',
   overflow: 'hidden',
+  cursor: 'default',
 }, [
   title,
 ]);
 
-const titleBar = () => Div({
+const titleBar = (title: string, onClose: Handler<void>) => Div({
   display: 'flex',
   height: '22px',
   width: '100%',
   justifyContent: 'space-between',
   alignItems: 'center',
 }, [
-  windowButtons(),
-  windowTitle('Ribs — zsh — Solarized Dark – 98x26'),
+  windowButtons(onClose),
+  windowTitle(title),
   Div({
     flex: '0 10000 52px',
     height: '8px',
@@ -389,24 +714,61 @@ const titleBar = () => Div({
   }),
 ]);
 
-const windowButtons = () => Div({
-  display: 'flex',
-  marginRight: '8px',
-}, [
-  windowButton('#ec6559'),
-  windowButton('#e0c14c'),
-  windowButton('#71c047'),
-]);
+const windowButtons = (close: Handler<never>): Component => r => {
+  const [hover, setHover] = useState(false);
+  const clickingClose = useState(false);
+  const clickingMin = useState(false);
+  const clickingMax = useState(false);
 
-const windowButton = (color: string) => Div({
-  height: '12px',
-  width: '12px',
-  borderRadius: '6px',
-  backgroundColor: color,
-  marginLeft: '8px',
-});
+  const showDetail = any([hover, clickingClose[0], clickingMin[0], clickingMax[0]]);
 
-function menuBar(windowDrag: Handler<MouseEvent>) {
+  const closeButton = windowButton(
+    '#ec6559', '#ef8e84', windowCloseIcon, showDetail, clickingClose, close);
+  const minButton = windowButton(
+    '#e0c14c', '#fcee71', windowMinimizeIcon, showDetail, clickingMin, () => 0);
+  const maxButton = windowButton(
+    '#71bf46', '#9ded6f', windowMaximizeIcon, showDetail, clickingMax, () => 0);
+
+  return Div({
+    display: 'flex',
+    marginRight: '8px',
+  }, [
+    closeButton,
+    minButton,
+    maxButton,
+  ], [
+    Hover(setHover),
+  ])(r);
+};
+
+const windowButton = (
+    defaultColor: string,
+    highlightColor: string,
+    icon: any,
+    showDetail: Stream<boolean>,
+    clicking: [Stream<boolean>, Handler<boolean>],
+    onClick: Handler<MouseEvent>): Component => r => {
+  const [hover, setHover] = useState(false);
+  const highlight = streamAll([hover, clicking[0]]);
+  const color = map(highlight, x => x ? highlightColor : defaultColor);
+  const content = enable(showDetail, icon({ color: 'black' }));
+  return Div({
+    height: '12px',
+    width: '12px',
+    borderRadius: '6px',
+    backgroundColor: color,
+    marginLeft: '8px',
+    position: 'relative',
+  }, [
+    content,
+  ], [
+    Hover(setHover),
+    Downing(clicking[1]),
+    Event('mouseup', onClick),
+  ])(r);
+};
+
+function simpleTitleBar(title: string, windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
   return Div({
     flex: '0 0 auto',
     backgroundColor: '#3d3e3f',
@@ -414,7 +776,21 @@ function menuBar(windowDrag: Handler<MouseEvent>) {
     overflow: 'scroll',
     position: 'relative',
   }, [
-    titleBar(),
+    titleBar(title, onClose),
+  ], [
+    Event('mousedown', windowDrag),
+  ]);
+}
+
+function menuBar(windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
+  return Div({
+    flex: '0 0 auto',
+    backgroundColor: '#3d3e3f',
+    boxShadow: '0 -1px 0 rgba(0, 0, 0, 0.24) inset, 0 -.5px 0 #000 inset',
+    overflow: 'scroll',
+    position: 'relative',
+  }, [
+    titleBar('Ribs — zsh — Solarized Dark – 98x26', onClose),
     toolbar(
       toolbarButton({icon: iconsIcon()}),
       toolbarButton({icon: listIcon()}),
@@ -580,8 +956,8 @@ function item({ title, icon, level = 0, active = false, expanded = just(false), 
 }) {
   const indent = `${level * 16}px`;
   const hasChildren = children && children.length > 0;
-  const openCaret = caretDownIcon(onCollapse);
-  const closedCaret = caretRightIcon(onExpand);
+  const openCaret = caretDownIcon({ onClick: onCollapse });
+  const closedCaret = caretRightIcon({ onClick: onExpand });
   const s = mounter(space(18));
   const carets = map(expanded, x => hasChildren
     ? x ? openCaret : closedCaret : s);
@@ -673,25 +1049,41 @@ const icons: { [key: string]: IconPath[] } = {
   ],
   nsChevron: [
     [1, 'M12.852,25.853C13.404,26.117 14.085,26.024 14.547,25.574L20.561,19.56C21.146,18.975 21.146,18.024 20.561,17.439C19.976,16.854 19.025,16.854 18.44,17.439L13.5,22.378L8.561,17.439C7.976,16.854 7.025,16.854 6.44,17.439C5.854,18.024 5.854,18.975 6.44,19.56L12.467,25.587L12.69,25.763L12.852,25.853ZM12.852,2.147C13.404,1.883 14.085,1.976 14.547,2.426L20.561,8.439C21.146,9.025 21.146,9.975 20.561,10.561C19.975,11.146 19.025,11.146 18.439,10.561L13.5,5.621L8.561,10.561C7.975,11.146 7.025,11.146 6.439,10.561C5.854,9.975 5.854,9.025 6.439,8.439L12.467,2.412L12.69,2.237L12.852,2.147Z'],
+  ],
+  windowClose: [
+    [.55, 'M12,10.586L16.293,6.293C16.683,5.903 17.317,5.903 17.707,6.293C18.097,6.683 18.097,7.317 17.707,7.707L13.414,12L17.707,16.293C18.097,16.683 18.097,17.317 17.707,17.707C17.317,18.097 16.683,18.097 16.293,17.707L12,13.414L7.707,17.707C7.317,18.097 6.683,18.097 6.293,17.707C5.903,17.317 5.903,16.683 6.293,16.293L10.586,12L6.293,7.707C5.903,7.317 5.903,6.683 6.293,6.293C6.683,5.903 7.317,5.903 7.707,6.293L12,10.586Z'],
+  ],
+  windowMinimize: [
+    [.55, 'M5,13L19,13C19.552,13 20,12.552 20,12C20,11.448 19.552,11 19,11L5,11C4.448,11 4,11.448 4,12C4,12.552 4.448,13 5,13Z'],
+  ],
+  windowMaximize: [
+    [.55, 'M15,18L6,9C6,9 6,14.256 6,16C6,17.104 6.896,18 8,18L15,18ZM9,6L18,15C18,15 18,9.744 18,8C18,6.896 17.104,6 16,6L9,6Z'],
+  ],
+  appleMenu: [
+    [.95, 'M34.219,28.783C33.761,29.857 33.219,30.845 32.591,31.753C31.735,32.991 31.034,33.849 30.494,34.325C29.657,35.106 28.759,35.506 27.799,35.529C27.109,35.529 26.277,35.33 25.309,34.926C24.337,34.524 23.444,34.325 22.628,34.325C21.772,34.325 20.854,34.524 19.872,34.926C18.888,35.33 18.096,35.54 17.49,35.561C16.568,35.601 15.65,35.189 14.733,34.325C14.148,33.807 13.416,32.919 12.54,31.662C11.599,30.32 10.826,28.763 10.22,26.988C9.571,25.07 9.246,23.214 9.246,21.416C9.246,19.358 9.684,17.582 10.563,16.094C11.253,14.899 12.172,13.956 13.321,13.263C14.47,12.571 15.712,12.219 17.05,12.196C17.782,12.196 18.741,12.426 19.934,12.877C21.123,13.33 21.887,13.559 22.222,13.559C22.472,13.559 23.32,13.291 24.758,12.756C26.118,12.259 27.266,12.054 28.206,12.135C30.754,12.343 32.668,13.362 33.941,15.198C31.662,16.598 30.535,18.56 30.558,21.077C30.578,23.037 31.279,24.668 32.657,25.964C33.281,26.565 33.978,27.029 34.754,27.359C34.586,27.854 34.408,28.328 34.219,28.783ZM28,4C27.994,5.747 27.376,7.496 26.318,8.808C25.26,10.121 23.763,10.997 22,11C22.021,7.486 24.441,4.011 28,4Z'],
   ]
 };
 
-const sidebarDesktopFolderIcon = pathsIcon.bind(undefined, icons.sidebarDesktopFolder, 18);
-const sidebarGenericFolderIcon = pathsIcon.bind(undefined, icons.sidebarGenericFolder, 18);
-const sidebariCloudIcon = pathsIcon.bind(undefined, icons.sidebariCloud, 18);
-const sidebarDocumentsFolderIcon = pathsIcon.bind(undefined, icons.sidebarDocumentsFolder, 18);
-const sidebarDownloadsFolderIcon = pathsIcon.bind(undefined, icons.sidebarDownloadsFolder, 18);
-const sidebarMoviesFolderIcon = pathsIcon.bind(undefined, icons.sidebarMoviesFolder, 18);
-const caretRightIcon = pathsIcon.bind(undefined, icons.caretRight, 18);
-const caretDownIcon = pathsIcon.bind(undefined, icons.caretDown, 18);
-const iconsIcon = pathsIcon.bind(undefined, icons.icons, 18);
-const listIcon = pathsIcon.bind(undefined, icons.list, 18);
-const columnsIcon = pathsIcon.bind(undefined, icons.columns, 18);
-const galleryIcon = pathsIcon.bind(undefined, icons.gallery, 18);
-const searchIcon = pathsIcon.bind(undefined, icons.search, 18);
-const checkmark = pathsIcon.bind(undefined, icons.checkmark, 14);
-const mixedIcon = pathsIcon.bind(undefined, icons.mixed, 14);
-const nsChevronIcon = (style: any) => pathsIcon(icons.nsChevron, 14, undefined, style);
+const sidebarDesktopFolderIcon = pathsIcon(icons.sidebarDesktopFolder, 18);
+const sidebarGenericFolderIcon = pathsIcon(icons.sidebarGenericFolder, 18);
+const sidebariCloudIcon = pathsIcon(icons.sidebariCloud, 18);
+const sidebarDocumentsFolderIcon = pathsIcon(icons.sidebarDocumentsFolder, 18);
+const sidebarDownloadsFolderIcon = pathsIcon(icons.sidebarDownloadsFolder, 18);
+const sidebarMoviesFolderIcon = pathsIcon(icons.sidebarMoviesFolder, 18);
+const caretRightIcon = pathsIcon(icons.caretRight, 18);
+const caretDownIcon = pathsIcon(icons.caretDown, 18);
+const iconsIcon = pathsIcon(icons.icons, 18);
+const listIcon = pathsIcon(icons.list, 18);
+const columnsIcon = pathsIcon(icons.columns, 18);
+const galleryIcon = pathsIcon(icons.gallery, 18);
+const searchIcon = pathsIcon(icons.search, 18);
+const checkmark = pathsIcon(icons.checkmark, 14);
+const mixedIcon = pathsIcon(icons.mixed, 14);
+const nsChevronIcon = pathsIcon(icons.nsChevron, 14);
+const windowCloseIcon = pathsIcon(icons.windowClose, 12);
+const windowMinimizeIcon = pathsIcon(icons.windowMinimize, 12);
+const windowMaximizeIcon = pathsIcon(icons.windowMaximize, 12);
+const appleMenuIcon = pathsIcon(icons.appleMenu, 22);
 
 function space(size: number) {
   const div = document.createElement('div');
@@ -701,11 +1093,11 @@ function space(size: number) {
 
 const flexibleSpace = Div({ flex: '1 0 0' });
 
-type Unmounter = () => void;
-type Component = (p: Node) => Unmounter;
-
 type Cleanup = () => void;
-type Effect = (p: HTMLElement) => Cleanup;
+type Temporary<T = void> = (x: T) => Cleanup;
+type Unmounter = Cleanup;
+type Component = Temporary<Node>;
+type Effect = Temporary<Element>;
 
 const mounter = (n: Node): Component => r => mount(n, r);
 
@@ -715,28 +1107,36 @@ const mount = (n: Node, r: Node) => {
   return () => p.replaceChild(r, n);
 }
 
-function pathsIcon(paths: IconPath[], scale: number, onClick?: Handler<MouseEvent>, style?: any): Component {
-  const scaleStr = `${scale}`;
-  const viewBox = `0 0 ${scale * 2} ${scale * 2}`;
-  return r => {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttributeNS(null, 'fill', '#ffffff');
-    svg.setAttributeNS(null, 'width', scaleStr);
-    svg.setAttributeNS(null, 'height', scaleStr);
-    svg.setAttributeNS(null, 'viewBox', viewBox);
-    svg.setAttributeNS(null, 'fill-rule', 'evenodd');
-    Object.keys(style || {}).forEach(k => {
-      svg.style.setProperty(k, style[k]);
-    });
-    if (onClick) svg.addEventListener('click', onClick);
-    paths.forEach(([o, p]) => {
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttributeNS(null, 'd', p);
-      path.setAttributeNS(null, 'fill-opacity', `${o}`);
-      svg.appendChild(path);
-    });
-    return mount(svg, r);
-  }
+function pathsIcon(paths: IconPath[], defaultSize = 18, defaultColor = 'white') {
+  return ({ size = defaultSize, color = defaultColor, onClick, style }: {
+    size?: number,
+    color?: string,
+    onClick?: Handler<MouseEvent>,
+    style?: any,
+  } = {}): Component => {
+    const sizeStr = `${size}`;
+    const viewBox = `0 0 ${size * 2} ${size * 2}`;
+    return r => {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttributeNS(null, 'fill', color);
+      svg.setAttributeNS(null, 'width', sizeStr);
+      svg.setAttributeNS(null, 'height', sizeStr);
+      svg.setAttributeNS(null, 'viewBox', viewBox);
+      svg.setAttributeNS(null, 'fill-rule', 'evenodd');
+      svg.style.display = 'block';
+      Object.keys(style || {}).forEach(k => {
+        svg.style.setProperty(k, style[k]);
+      });
+      if (onClick) svg.addEventListener('click', onClick);
+      paths.forEach(([o, p]) => {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttributeNS(null, 'd', p);
+        path.setAttributeNS(null, 'fill-opacity', `${o}`);
+        svg.appendChild(path);
+      });
+      return mount(svg, r);
+    }
+  };
 }
 
 const radio = (active: Stream<boolean>) => Div({
@@ -794,33 +1194,40 @@ const select = (label: string) => Div({
     width: '16px',
     alignSelf: 'stretch',
   }, [
-    nsChevronIcon({
+    nsChevronIcon({ style: {
       transform: 'translate(1px, 2.5px)',
-    }),
+    }}),
   ]),
   gloss,
 ]);
 
-const menu = (contents: Component[]) => Div({
+const menu = (contents: Component[], dropdown = false) => Div({
   padding: '4px 0',
   backgroundColor: '#323334',
-  borderRadius: '5px',
+  borderRadius: dropdown ? '0 0 5px 5px' : '5px',
   boxShadow: '0 0 0 .5px rgba(0, 0, 0, .8), 0 10px 20px rgba(0, 0, 0, .3)',
   position: 'relative',
+  whiteSpace: 'nowrap',
 }, [
   ...contents,
-  borderOverlay,
+  dropdown ? dropdownBorderOverlay : borderOverlay,
 ]);
 
-const menuItem = (label: string, highlight: boolean = false) => Div({
-  height: '19px',
-  fontSize: '14px',
-  backgroundColor: highlight ? '#336dd9' : 'transparent',
-  color: '#ffffff',
-  display: 'flex',
-  alignItems: 'center',
-  padding: '0 21px',
-}, [span({}, [label])]);
+const either = <T>(s: Stream<boolean>, a: T, b: T) => map(s, x => x ? a : b);
+
+const menuItem = (label: string, onClick: Handler<MouseEvent> = () => {}): Component => {
+  const [hover, setHover] = useState(false);
+  return Div({
+    height: '19px',
+    fontSize: '14px',
+    backgroundColor: either(hover, '#336dd9', 'transparent'),
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 21px',
+    cursor: 'default',
+  }, [span({}, [label])], [Hover(setHover), Event('click', onClick)]);
+};
 
 const menuSeparator = () => Div({
   height: '2px',
@@ -841,12 +1248,12 @@ const gloss = Div({
 });
 
 const streamComp = (s: Stream<Component>): Component => r => {
-  let old: Unmounter | undefined
+  let old = () => {};
   const unsub = s(x => {
-    old && old();
+    old();
     old = x(r);
   });
-  return () => (unsub(), old && old());
+  return () => (unsub(), old());
 };
 
 // Component that does nothing.
@@ -854,13 +1261,79 @@ const empty: Component = () => () => {};
 
 const enable = (s: Stream<boolean>, c: Component) => streamComp(map(s, x => x ? c : empty));
 
-function App(...contents: Component[]) {
+interface WindowRecord {
+  frame: Stream<Frame>;
+  zIndex: Stream<number>;
+  handles: FrameHandles;
+  content: Component;
+  close: Stream<void>;
+}
+
+type WindowStream = Stream<WindowRecord>;
+type WindowAdder = Handler<Window>;
+
+const makeEnvironment = (): [WindowStream, WindowAdder] => {
+  const windows: {[k: number]: [Handler<void>, WindowRecord]} = {};
+  const nextId = counter();
+
+  const [windowStream, emitWindow] = useStream<WindowRecord>();
+
+  const closeWindow = (k: number) => {
+    if (!windows[k]) return;
+    windows[k][0]();
+    delete windows[k];
+  };
+
+  const addWindow = (w: Window) => {
+    const k = nextId();
+    const [frame, handles] = useFrame({ x: 100, y: 100, width: 500, height: 400 });
+    const [$close, close] = useStream();
+    const zIndex = just(0);
+    const content = w({
+      close: () => closeWindow(k),
+      handles,
+      minimize: null as any,
+      maximize: null as any,
+      focus: null as any,
+    });
+    windows[k] = [close, {
+      frame,
+      zIndex,
+      handles,
+      content,
+      close: $close,
+    }];
+    emitWindow(windows[k][1]);
+  };
+
+  return [windowStream, addWindow];
+};
+
+function StaticDesktop(...windows: Window[]) {
+
+  // So... I think the desktop should ultimately be in control of the layering.
+  // So maybe we create a div for each window to live inside of.
+  // const frames: HTMLDivElement[] = [];
+  const contents = [];
+
+  for (const window of windows) {
+    const [frame, handles] = useFrame({ x: 100, y: 100, width: 500, height: 400 });
+    const ctrl: WindowControls = {
+      close() {},
+      minimize() {},
+      maximize() {},
+      focus() {},
+      handles,
+    };
+    const content = window(ctrl);
+    const comp = windowFrame(frame, just(0), handles, content);
+    contents.push(comp);
+  }
+
   return Div({
     backgroundColor: '#000000',
     width: '100vw',
     height: '100vh',
-    justifyContent: 'center',
-    alignItems: 'center',
     position: 'relative',
   }, contents, [
     ContextMenu(menu([
@@ -880,13 +1353,339 @@ function App(...contents: Component[]) {
   ]);
 }
 
+const useDynamicContent = (): [Component, (x: Component) => Cleanup] => {
+  const [content, emitContent] = useStream<[number, Component?]>();
+  const nextId = counter();
+  const c: Component = r => {
+    const box = elem('div');
+    const removers = {} as any;
+    return cleanup([
+      content(([k, x]) => {
+        if (x) {
+          removers[k] = render(x, box);
+        } else if (removers[k]) {
+          removers[k]();
+          delete removers[k];
+        }
+      }),
+      mount(box, r),
+    ]);
+  };
+  const addContent = (c: Component) => {
+    const k = nextId();
+    emitContent([k, c]);
+    return () => emitContent([k]);
+  }
+  return [c, addContent];
+};
+
+type OneHotStreams = (x: number) => Stream<boolean>;
+type OneHotSetter = Handler<number | undefined>;
+type OneHot = [OneHotStreams, OneHotSetter];
+
+const useOneHot = (): OneHot => {
+  let curr: number | undefined;
+  const streams: {[k: number]: [Stream<boolean>, Handler<boolean>]} = {};
+  const getter = (k: number) => {
+    if (!streams[k]) {
+      streams[k] = useState(k === curr);
+    }
+    return streams[k][0];
+  };
+  const setter = (x: number | undefined) => {
+    if (x === curr) return;
+    if (curr !== undefined && streams[curr]) {
+      streams[curr][1](false);
+    }
+    curr = x;
+    if (x !== undefined && streams[x]) {
+      streams[x][1](true);
+    }
+  }
+  return [getter, setter];
+};
+
+const menuBarItemStyle: Partial<CSSStyleDeclaration> = {
+  height: '100%',
+  position: 'relative',
+};
+
+const menuBarLabelStyle: Partial<CSSStyleDeclaration> = {
+  padding: '0 10px',
+  height: '100%',
+  display: 'flex',
+  flexFlow: 'row nowrap',
+  alignItems: 'center',
+  color: '#ffffff',
+  fontSize: '14px',
+  cursor: 'default',
+  position: 'relative',
+  zIndex: '2',
+};
+
+const triggerEffect = (s: Stream<boolean>, f: Temporary) => {
+  let curr: Cleanup | undefined;
+  const unsub = s(x => {
+    if (x) {
+      if (!curr) {
+        curr = f();
+      }
+    } else {
+      if (curr) {
+        curr();
+        curr = undefined;
+      }
+    }
+  });
+  return () => {
+    unsub();
+    if (curr) curr();
+  };
+};
+
+const menuBarLabel = (s: string, fontWeight = '400') => {
+  const item = elem('div');
+  item.textContent = s;
+  Object.assign(item.style, menuBarLabelStyle, { fontWeight });
+  return item;
+}
+
+const MenuBar = (mainMenu: Component): Component => r => {
+
+  function showMenuIn(menu: Component, r: HTMLElement) {
+    const c = elem('div');
+    c.style.position = 'absolute';
+    c.style.top = '100%';
+    c.style.left = '0';
+    c.style.zIndex = '0';
+    c.style.transition = 'opacity .25s ease-in';
+
+    const cu = cleanup([
+      render(menu, c),
+      mount(c, r.appendChild(marker())),
+    ]);
+    return (fade: boolean) => {
+      if (fade) {
+        c.style.opacity = '0';
+        setTimeout(cu, 150);
+      } else {
+        cu();
+      }
+    };
+  }
+
+  const us = [];
+
+  const [activeItem, setActiveItem] = useState<number | undefined>(undefined);
+  const [itemActive, setItemActive] = useOneHot();
+
+  // Menu bar is "active" if any individual menu item is active.
+  const active = map(activeItem, x => x !== undefined);
+
+  // Connect the active item state to the one-hot functions.
+  us.push(activeItem(setItemActive));
+
+  const ami = elem('div');
+  Object.assign(ami.style, menuBarItemStyle);
+  const amiLabel = elem('div');
+  ami.appendChild(amiLabel);
+  Object.assign(amiLabel.style, {
+    width: '35px',
+    height: '100%',
+    position: 'relative',
+    zIndex: '2',
+  });
+  us.push( render(appleMenuIcon({ style: { transform: 'translateX(6.5px)' }}), amiLabel) );
+
+  const menuBarItem = (s: string, fontWeight = '400') => {
+    const item = elem('div');
+    Object.assign(item.style, menuBarItemStyle);
+    item.appendChild(menuBarLabel(s, fontWeight));
+    return item;
+  };
+
+  const items = [
+    ami,
+    menuBarItem('Safari', '700'),
+    menuBarItem('File'),
+    menuBarItem('Edit'),
+    menuBarItem('View'),
+    menuBarItem('History'),
+    menuBarItem('Bookmarks'),
+    menuBarItem('Develop'),
+    menuBarItem('Window'),
+    menuBarItem('Help'),
+  ];
+
+  let curr: any;
+  activeItem(x => {
+    if (curr) curr(x === undefined);
+    curr = x !== undefined ? showMenuIn(mainMenu, items[x]) : undefined;
+  });
+
+  us.push(
+    ...items.map((x, i) => Event('mousedown', e => {
+      e.preventDefault();
+      setActiveItem(i);
+    })(x.children[0])),
+    ...items.map((x, i) => itemActive(i)(h => {
+      (x.children[0] as any).style.backgroundColor = h ? '#336dd9' : 'transparent';
+    })),
+  );
+
+  // Whenever we become active, enable extra stuff.
+  us.push(triggerEffect(active, () => cleanup([
+    Event('mousedown', () => setActiveItem(undefined), true)(document.body),
+    ...items.map((x, i) => Event('mouseenter', () => setActiveItem(i))(x.children[0])),
+  ])));
+
+  us.push(Div({
+    height: '22px',
+    display: 'flex',
+    flexFlow: 'row nowrap',
+    paddingLeft: '10px',
+    zIndex: '100',
+    position: 'relative',
+  }, [
+    Div({
+      position: 'absolute',
+      left: '0',
+      right: '0',
+      top: '0',
+      bottom: '0',
+      zIndex: '1',
+      backgroundColor: '#1b1a1e',
+    }),
+    ...items,
+  ])(r));
+
+  return cleanup(us);
+};
+
+const Desktop = (env: WindowStream, mainMenu: Component): Component => r => {
+  const [dynContent, addContent] = useDynamicContent();
+  env(x => {
+    const comp = windowFrame(x.frame, x.zIndex, x.handles, x.content);
+    x.close(addContent(comp));
+  });
+
+  return Div({
+    backgroundColor: '#000000',
+    width: '100vw',
+    height: '100vh',
+    position: 'relative',
+  }, [MenuBar(mainMenu), dynContent], [
+    ContextMenu(menu([
+      menuItem('New Folder'),
+      menuSeparator(),
+      menuItem('Get Info'),
+      menuSeparator(),
+      menuItem('Import from iPhone or iPad'),
+      menuSeparator(),
+      menuItem('Change Desktop Background...'),
+      menuItem('Use Stacks'),
+      menuItem('Sort By'),
+      menuItem('Clean Up'),
+      menuItem('Clean Up By'),
+      menuItem('Show View Options'),
+    ])),
+  ])(r);
+}
+
+function all(...es: Effect[]): Effect {
+  return n => cleanup(es.map(e => e(n)));
+}
+
 function Event<Type extends keyof HTMLElementEventMap>(
   t: Type,
   h: Handler<HTMLElementEventMap[Type]>,
+  capture?: boolean,
 ): Effect {
   return n => {
-    n.addEventListener(t, h);
-    return () => n.removeEventListener(t, h);
+    n.addEventListener(t, h, capture);
+    return () => n.removeEventListener(t, h, capture);
+  };
+}
+
+function AddClass(s: string): Effect {
+  return n => {
+    if (n.classList.contains(s)) {
+      return () => undefined;
+    }
+    n.classList.add(s);
+    return () => n.classList.remove(s);
+  };
+}
+
+function Hover(h: Handler<boolean>): Effect {
+  return n => {
+    const mouseEnter = () => { h(true); };
+    const mouseLeave = () => { h(false); };
+    n.addEventListener('mouseenter', mouseEnter);
+    n.addEventListener('mouseleave', mouseLeave);
+    return () => {
+      n.removeEventListener('mouseenter', mouseEnter);
+      n.removeEventListener('mouseleave', mouseLeave);
+    };
+  };
+}
+
+/**
+ * Adds an effect to a node that triggers the given handler effect `h`
+ * whenever the user both has their mouse down and is over the node. If `r` is
+ * provided, then it's called if the user releases their mouse while over it.
+ */
+function Downing(h: Handler<boolean>): Effect {
+  return n => {
+    const mouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      h(true);
+    };
+    const mouseUp = () => h(false);
+    n.addEventListener('mousedown', mouseDown);
+    window.addEventListener('mouseup', mouseUp);
+    return () => {
+      n.removeEventListener('mousedown', mouseDown);
+      window.removeEventListener('mouseup', mouseUp);
+    };
+  };
+}
+
+/**
+ * Adds an effect to a node that triggers the given handler effect `h`
+ * whenever the user both has their mouse down and is over the node. If `r` is
+ * provided, then it's called if the user releases their mouse while over it.
+ */
+function Clicking(h: Handler<boolean>, r?: Handler<MouseEvent>): Effect {
+  return n => {
+    let down = false;
+    let over = false;
+    const mouseEnter = () => { over = true; if (down) h(true); };
+    const mouseLeave = () => { over = false; if (down) h(false); };
+    const mouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      down = true;
+      if (over) h(true);
+    };
+    const mouseUp = (e: MouseEvent) => {
+      down = false;
+      if (over) {
+        h(false);
+        r && r(e);
+      }
+    };
+    n.addEventListener('mouseenter', mouseEnter);
+    n.addEventListener('mouseleave', mouseLeave);
+    n.addEventListener('mousedown', mouseDown);
+    window.addEventListener('mouseup', mouseUp);
+    return () => {
+      n.removeEventListener('mouseenter', mouseEnter);
+      n.removeEventListener('mouseleave', mouseLeave);
+      n.removeEventListener('mousedown', mouseDown);
+      window.removeEventListener('mouseup', mouseUp);
+    };
   };
 }
 
@@ -894,10 +1693,6 @@ function ContextMenu(menu: Component): Effect {
   return Event('contextmenu', e => {
     e.preventDefault();
     e.stopPropagation();
-
-    // TODO: Send event to global context menu layer, 
-    console.log('Right click');
-    
     showContextMenu(e, menu);
   });
 }
@@ -1044,9 +1839,86 @@ function useFrame(init: Frame): [Stream<Frame>, FrameHandles] {
   return [frame, {top, bottom, left, right, topLeft, topRight, bottomLeft, bottomRight, middle}];
 }
 
-const [frame, handles] = useFrame({x: 100, y: 200, width: 500, height: 400});
-const [frame2, handles2] = useFrame({x: 200, y: 100, width: 500, height: 400});
-const [expanded, setExpanded] = useState(false);
+const Pane = (color: string, children?: ElementThing[]) => Div({
+  width: '100%',
+  height: '100%',
+  backgroundColor: '#ffffff',
+}, children);
 
-const app = App(finder(frame, expanded, setExpanded, handles), finder(frame2, expanded, setExpanded, handles2));
-render(app, document.body);
+const WhitePane = Pane('white');
+
+const Matte = (content: ElementThing) => Div({
+  width: '100%',
+  height: '100%',
+  backgroundColor: '#ffffff',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+}, [content]);
+
+type Window = (c: WindowControls) => Component;
+type WindowCloser = () => void;
+type WindowOpener = (w: Window) => WindowCloser;
+
+// You create a window controller...
+// You can tell it to open windows.
+// You can tell it to close windows.
+//
+// State:
+//   - List of windows. Maybe the order of this list is the stacking order of the windows.
+//
+// How does a window 
+//  - 
+// You can create a new window by providing a content view.
+/*
+env.open(Finder);
+*/
+
+const [windows, addWindow] = makeEnvironment();
+
+const plot = SimpleWindow("Yooo", Matte(Plot2D(just([0, 1]), just([0, 1]))));
+
+const appleMenu = menu([
+  menuItem('About This Mac'),
+  menuSeparator(),
+  menuItem('System Preferences...'),
+  menuItem('App Store...'),
+  menuSeparator(),
+  menuItem('Recent Items'),
+  menuSeparator(),
+  menuItem('Force Quit...'),
+  menuSeparator(),
+  menuItem('Sleep'),
+  menuItem('Restart...'),
+  menuItem('Shut Down...'),
+  menuSeparator(),
+  menuItem('Lock Screen'),
+  menuItem('Log Out Toby Bell...'),
+], true);
+
+const safariMenu = menu([
+  menuItem('About Safari', () => addWindow(Finder)),
+  menuItem('Safari Extensions...', () => addWindow(plot)),
+  menuSeparator(),
+  menuItem('Preferences...'),
+  menuItem('Privacy Report...'),
+  menuItem('Settings for This Website...'),
+  menuSeparator(),
+  menuItem('Clear History...'),
+  menuSeparator(),
+  menuItem('Services'),
+  menuSeparator(),
+  menuItem('Hide Safari'),
+  menuItem('Hide Others'),
+  menuItem('Show All'),
+  menuSeparator(),
+  menuItem('Quit Safari'),
+], true);
+
+const dt = Desktop(windows, safariMenu);
+
+render(dt, document.body);
+
+addWindow(Finder);
+addWindow(Finder);
+addWindow(plot);
