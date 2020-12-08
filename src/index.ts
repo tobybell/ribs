@@ -5,12 +5,16 @@ export {};
 
 type Unsubscriber = () => void;
 type Handler<T> = (x: T) => void;
+type Thunk = Handler<void>;
 type Stream<T> = (f: Handler<T>) => Unsubscriber;
 type Contents<T> = T extends Stream<infer U> ? U : never;
 type Values<T> = T | Stream<T>;
 
+/** No-op function. */
+const noop = () => {};
+
 /** Stream that just produces a fixed value. */
-const just = <T>(x: T): Stream<T> => h => (h(x), () => {});
+const just = <T>(x: T): Stream<T> => h => (h(x), noop);
 
 /** Stream that produces no/unit value at a given period. */
 const tick = (dt: number): Stream<void> => h => {
@@ -62,7 +66,7 @@ const counter = () => {
  * Union multiple streams.
  */
 const merge = <T extends Stream<any>[]>(...ss: T): Stream<{[K in keyof T]: Contents<T[K]>}[number]> => h => {
-  return cleanup(ss.map(s => s(h)));
+  return cleanup(...ss.map(s => s(h)));
 };
 
 const filterSame = <T>(s: Stream<T>): Stream<T> => h => {
@@ -79,7 +83,7 @@ const countTrue = (streams: Stream<boolean>[]): Stream<number> => {
   return h => {
     const values = Array(n);
     let m = 0;
-    return cleanup(streams.map((s, i) => s(x => {
+    return cleanup(...streams.map((s, i) => s(x => {
       if (x && !values[i]) {
         m += 1;
       } else if (!x && values[i]) {
@@ -214,7 +218,7 @@ interface WindowControls {
   handles: FrameHandles;
 }
 
-function cleanup(debts: Unsubscriber[]) {
+function cleanup(...debts: Unsubscriber[]) {
   return () => debts.forEach(x => x());
 }
 
@@ -245,7 +249,7 @@ function windowFrame(frame: Stream<Frame>, zIndex: Stream<number>, resize: Frame
 
     debts.push(mount(div, r));
 
-    return cleanup(debts);
+    return cleanup(...debts);
   };
 }
 
@@ -279,6 +283,8 @@ const Finder: Window = (c: WindowControls) => {
 const rsquare = () => square(Math.random());
 
 function finder(expanded: Stream<boolean>, setExpanded: any, c: WindowControls) {
+  const [which, setWhich] = useState(0);
+  const a = useOneHot(which);
   const content = WindowPane([
     menuBar(c.handles.middle, c.close),
     Div({
@@ -288,26 +294,27 @@ function finder(expanded: Stream<boolean>, setExpanded: any, c: WindowControls) 
       alignItems: 'stretch',
     }, [
       sidebar(expanded, setExpanded),
-      Div({}, [
-        radio(rsquare()),
-        radio(just(false)),
-        radio(just(false)),
-        checkbox(rsquare()),
-        checkbox(just(true)),
+      Div({ flex: '1 0 auto' }, [
+        radio(a(0), () => setWhich(0)),
+        radio(a(1), () => setWhich(1)),
+        radio(a(2), () => setWhich(2)),
+        checkbox(...useState(false)),
+        checkbox(...useState(true)),
         select('Medium'),
+        slider(...useState(.5)),
       ]),
     ]),
     borderOverlay,
   ], [
     ContextMenu(menu([
-      menuItem('Back'),
-      menuItem('Reload Page'),
-      menuSeparator(),
-      menuItem('Show Page Source'),
-      menuItem('Save Page As...'),
-      menuItem('Print Page...'),
-      menuSeparator(),
-      menuItem('Inspect Element'),
+      menuItem({ label: 'Back' }),
+      menuItem({ label: 'Reload Page' }),
+      menuSeparator,
+      menuItem({ label: 'Show Page Source' }),
+      menuItem({ label: 'Save Page As...' }),
+      menuItem({ label: 'Print Page...' }),
+      menuSeparator,
+      menuItem({ label: 'Inspect Element' }),
     ])),
   ]);
   return content;
@@ -333,10 +340,18 @@ function render(c: Component, p: Node) {
   return c(p.appendChild(marker()));
 }
 
+const Text = (s: Stream<string>): Component => r => {
+  const n = document.createTextNode('');
+  return cleanup(
+    s(x => n.textContent = x),
+    mount(n, r),
+  );
+};
+
 const Div = (
   style: Partial<StreamableCSS>,
   children?: ElementThing[],
-  effects?: Effect[],
+  effects?: (Effect | undefined)[],
 ): Component => r => {
   const t = elem('div');
 
@@ -366,14 +381,13 @@ const Div = (
     }
   });
 
-  // TODO: Use this.
   if (effects) {
-    us.push(...effects.map(f => f(t)));
+    effects.forEach(f => { if (f) us.push(f(t)); });
   }
 
   us.push(mount(t, r));
 
-  return cleanup(us);
+  return cleanup(...us);
 };
 
 type Limits = [number, number];
@@ -723,11 +737,11 @@ const windowButtons = (close: Handler<never>): Component => r => {
   const showDetail = any([hover, clickingClose[0], clickingMin[0], clickingMax[0]]);
 
   const closeButton = windowButton(
-    '#ec6559', '#ef8e84', windowCloseIcon, showDetail, clickingClose, close);
+    '#ec6559', '#ef8e84', windowCloseIcon, showDetail, clickingClose[1], close);
   const minButton = windowButton(
-    '#e0c14c', '#fcee71', windowMinimizeIcon, showDetail, clickingMin, () => 0);
+    '#e0c14c', '#fcee71', windowMinimizeIcon, showDetail, clickingMin[1], () => 0);
   const maxButton = windowButton(
-    '#71bf46', '#9ded6f', windowMaximizeIcon, showDetail, clickingMax, () => 0);
+    '#71bf46', '#9ded6f', windowMaximizeIcon, showDetail, clickingMax[1], () => 0);
 
   return Div({
     display: 'flex',
@@ -746,10 +760,9 @@ const windowButton = (
     highlightColor: string,
     icon: any,
     showDetail: Stream<boolean>,
-    clicking: [Stream<boolean>, Handler<boolean>],
+    onClicking: Handler<boolean>,
     onClick: Handler<MouseEvent>): Component => r => {
-  const [hover, setHover] = useState(false);
-  const highlight = streamAll([hover, clicking[0]]);
+  const [highlight, setHighlight] = useState(false);
   const color = map(highlight, x => x ? highlightColor : defaultColor);
   const content = enable(showDetail, icon({ color: 'black' }));
   return Div({
@@ -762,9 +775,7 @@ const windowButton = (
   }, [
     content,
   ], [
-    Hover(setHover),
-    Downing(clicking[1]),
-    Event('mouseup', onClick),
+    useClickController(setHighlight, onClick, onClicking),
   ])(r);
 };
 
@@ -811,11 +822,11 @@ function FillDragRegion(h: Handler<MouseEvent>) {
 function toolbar(...items: Component[]) {
   return Div({ display: 'flex', margin: '3px 8px 8px' }, items, [
     ContextMenu(menu([
-      menuItem('Icon and Text'),
-      menuItem('Icon Only'),
-      menuItem('Text Only'),
-      menuSeparator(),
-      menuItem('Customize Toolbar...'),
+      menuItem({ label: 'Icon and Text' }),
+      menuItem({ label: 'Icon Only' }),
+      menuItem({ label: 'Text Only' }),
+      menuSeparator,
+      menuItem({ label: 'Customize Toolbar...' }),
     ]))
   ]);
 }
@@ -1061,7 +1072,10 @@ const icons: { [key: string]: IconPath[] } = {
   ],
   appleMenu: [
     [.95, 'M34.219,28.783C33.761,29.857 33.219,30.845 32.591,31.753C31.735,32.991 31.034,33.849 30.494,34.325C29.657,35.106 28.759,35.506 27.799,35.529C27.109,35.529 26.277,35.33 25.309,34.926C24.337,34.524 23.444,34.325 22.628,34.325C21.772,34.325 20.854,34.524 19.872,34.926C18.888,35.33 18.096,35.54 17.49,35.561C16.568,35.601 15.65,35.189 14.733,34.325C14.148,33.807 13.416,32.919 12.54,31.662C11.599,30.32 10.826,28.763 10.22,26.988C9.571,25.07 9.246,23.214 9.246,21.416C9.246,19.358 9.684,17.582 10.563,16.094C11.253,14.899 12.172,13.956 13.321,13.263C14.47,12.571 15.712,12.219 17.05,12.196C17.782,12.196 18.741,12.426 19.934,12.877C21.123,13.33 21.887,13.559 22.222,13.559C22.472,13.559 23.32,13.291 24.758,12.756C26.118,12.259 27.266,12.054 28.206,12.135C30.754,12.343 32.668,13.362 33.941,15.198C31.662,16.598 30.535,18.56 30.558,21.077C30.578,23.037 31.279,24.668 32.657,25.964C33.281,26.565 33.978,27.029 34.754,27.359C34.586,27.854 34.408,28.328 34.219,28.783ZM28,4C27.994,5.747 27.376,7.496 26.318,8.808C25.26,10.121 23.763,10.997 22,11C22.021,7.486 24.441,4.011 28,4Z'],
-  ]
+  ],
+  mCheck: [
+    [.95, 'M11.579,18.744L20.605,4.898C21.202,3.983 22.429,3.725 23.344,4.321C24.259,4.918 24.518,6.145 23.921,7.06L13.463,23.102C13.124,23.622 12.561,23.952 11.942,23.995C11.323,24.038 10.719,23.788 10.312,23.32L4.887,17.081C4.17,16.256 4.257,15.005 5.082,14.288C5.906,13.572 7.157,13.659 7.874,14.483L11.579,18.744Z'],
+  ],
 };
 
 const sidebarDesktopFolderIcon = pathsIcon(icons.sidebarDesktopFolder, 18);
@@ -1080,6 +1094,7 @@ const searchIcon = pathsIcon(icons.search, 18);
 const checkmark = pathsIcon(icons.checkmark, 14);
 const mixedIcon = pathsIcon(icons.mixed, 14);
 const nsChevronIcon = pathsIcon(icons.nsChevron, 14);
+const mCheckIcon = pathsIcon(icons.mCheck, 14);
 const windowCloseIcon = pathsIcon(icons.windowClose, 12);
 const windowMinimizeIcon = pathsIcon(icons.windowMinimize, 12);
 const windowMaximizeIcon = pathsIcon(icons.windowMaximize, 12);
@@ -1108,14 +1123,15 @@ const mount = (n: Node, r: Node) => {
 }
 
 function pathsIcon(paths: IconPath[], defaultSize = 18, defaultColor = 'white') {
-  return ({ size = defaultSize, color = defaultColor, onClick, style }: {
+  return ({ size = defaultSize, color = defaultColor, onClick, style, effects = [] }: {
     size?: number,
     color?: string,
     onClick?: Handler<MouseEvent>,
     style?: any,
+    effects?: Temporary<SVGSVGElement>[],
   } = {}): Component => {
     const sizeStr = `${size}`;
-    const viewBox = `0 0 ${size * 2} ${size * 2}`;
+    const viewBox = `0 0 ${defaultSize * 2} ${defaultSize * 2}`;
     return r => {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttributeNS(null, 'fill', color);
@@ -1134,100 +1150,282 @@ function pathsIcon(paths: IconPath[], defaultSize = 18, defaultColor = 'white') 
         path.setAttributeNS(null, 'fill-opacity', `${o}`);
         svg.appendChild(path);
       });
-      return mount(svg, r);
+      return cleanup(
+        ...effects.map(f => f(svg)),
+        mount(svg, r),
+      );
     }
   };
 }
 
-const radio = (active: Stream<boolean>) => Div({
-  width: '16px',
-  height: '16px',
-  borderRadius: '8px',
-  margin: '16px',
-  backgroundImage: map(active, x => x ? 'linear-gradient(#3367df, #255cc6)' : 'linear-gradient(#505152, #6b6c6c)'),
-  boxShadow: '0 .5px 1px -.5px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 .5px 1px rgba(0, 0, 0, .4)',
-}, [
-  Div({
-    visibility: map(active, x => x ? 'visible' : 'hidden'),
-    transform: 'translate(5.25px, 5.25px)',
-    width: '5.5px',
-    height: '5.5px',
-    backgroundColor: '#ffffff',
-    borderRadius: '2.75px',
-  }),
-]);
+const useClickController = (
+    onHighlight: Handler<boolean> = noop,
+    onClick: Handler<MouseEvent> = noop,
+    onClicking: Handler<boolean> = noop) => {
+  return Event('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLDivElement;
+    let over = true;
+    const highlight = () => {
+      onHighlight(true);
+      over = true;
+    };
+    const unhighlight = () => {
+      onHighlight(false);
+      over = false;
+    };
+    const cleanup = (e: MouseEvent) => {
+      if (over && onClick) onClick(e);
+      unhighlight();
+      onClicking(false);
+      target.removeEventListener('mouseenter', highlight);
+      target.removeEventListener('mouseleave', unhighlight);
+      window.removeEventListener('mouseup', cleanup);
+    }
+    onClicking(true);
+    highlight();
+    target.addEventListener('mouseenter', highlight);
+    target.addEventListener('mouseleave', unhighlight);
+    window.addEventListener('mouseup', cleanup);
+  });
+};
+
+const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) => {
+  const [highlight, setHighlight] = useState(false);
+  const click = useClickController(setHighlight, onClick);
+  return Div({
+    width: '16px',
+    height: '16px',
+    borderRadius: '8px',
+    margin: '16px',
+    backgroundImage: map(active, x => x ? 'linear-gradient(#3367df, #255cc6)' : 'linear-gradient(#505152, #6b6c6c)'),
+    boxShadow: '0 .5px 1px -.5px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 .5px 1px rgba(0, 0, 0, .4)',
+    position: 'relative',
+    overflow: 'hidden',
+  }, [
+    Div({
+      visibility: map(active, x => x ? 'visible' : 'hidden'),
+      transform: 'translate(5.25px, 5.25px)',
+      width: '5.5px',
+      height: '5.5px',
+      backgroundColor: '#ffffff',
+      borderRadius: '2.75px',
+    }),
+    enable(highlight, Div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
+  ], [
+    click,
+  ]);
+};
 
 // TODO:
 //   State: on, mixed, off
 //   Disabled: yes, no
 //   Blurred: yes, no
 //   Highlighted: yes, no
-const checkbox = (state: Stream<boolean>) => Div({
-  width: '14px',
-  height: '14px',
-  borderRadius: '3px',
-  margin: '16px',
-  backgroundImage: map(state, x => x ? 'linear-gradient(#3367df, #255cc6)' : 'linear-gradient(#505152, #6b6c6c)'),
-  boxShadow: '0 1px 1px -1px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
-}, [
-  enable(state, checkmark()),
-]);
-
-const select = (label: string) => Div({
-  margin: '16px',
-  width: '120px',
-  height: '19px',
-  backgroundColor: '#666768',
-  borderRadius: '3px',
-  boxShadow: '0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
-  paddingLeft: '8px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  color: '#ffffff',
-  overflow: 'hidden',
-  position: 'relative',
-}, [
-  label,
-  Div({
-    backgroundImage: 'linear-gradient(#3367df, #255cc6)',
-    width: '16px',
-    alignSelf: 'stretch',
+const checkbox = (state: Stream<boolean>, onChange?: Handler<boolean>) => {
+  let checked: boolean;
+  const [active, setActive] = useState(false);
+  const click = useClickController(setActive, onChange && (() => onChange(!checked)));
+  return Div({
+    width: '14px',
+    height: '14px',
+    borderRadius: '3px',
+    margin: '16px',
+    backgroundImage: either(state, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
+    boxShadow: '0 1px 1px -1px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
+    position: 'relative',
+    overflow: 'hidden',
   }, [
-    nsChevronIcon({ style: {
-      transform: 'translate(1px, 2.5px)',
-    }}),
-  ]),
-  gloss,
-]);
+    enable(state, checkmark()),
+    enable(active, Div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
+  ], [
+    () => state(x => checked = x),
+    click,
+  ]);
+};
 
-const menu = (contents: Component[], dropdown = false) => Div({
+const slider = (
+    value: Stream<number>,
+    onChange: Handler<number> = noop) => {
+  return Div({
+    position: 'relative',
+    height: '15px',
+    margin: '16px',
+  }, [
+    Div({
+      backgroundColor: '#505050',
+      height: '3px',
+      width: '100%',
+      borderRadius: '1.5px',
+      transform: 'translate(0, 6px)',
+    }, [
+      Div({
+        backgroundColor: '#3268de',
+        height: '100%',
+        width: '100%',
+        transform: map(value, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
+      }),
+    ]),
+    Div({
+      width: '100%',
+      height: '15px',
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      transform: map(value, v => `translateX(calc(${v} * (100% - 15px)))`),
+    }, [
+      Div({
+        backgroundColor: '#ccc',
+        height: '15px',
+        width: '15px',
+        borderRadius: '7.5px',
+        boxShadow: '0 .5px 1px -.5px rgba(255, 255, 255, .6) inset, 0 0 1px rgba(0, 0, 0, .3), 0 .5px 1px rgba(0, 0, 0, .3)',
+      })
+    ]),
+  ], [
+    Event('mousedown', e => {
+      e.preventDefault();
+      const target = e.currentTarget as HTMLDivElement;
+      const rect = target.getBoundingClientRect();
+      const left = rect.left + 7.5;
+      const width = rect.width - 15;
+
+      const update = (e: MouseEvent) => {
+        const lerp = (e.clientX - left) / width;
+        const value = Math.min(Math.max(lerp, 0), 1);
+        onChange(value);
+      };
+    
+      const stopUpdate = () => {
+        window.removeEventListener('mousemove', update);
+        window.removeEventListener('mouseup', stopUpdate);
+      };
+
+      update(e);
+      window.addEventListener('mousemove', update);
+      window.addEventListener('mouseup', stopUpdate);
+    }),
+  ]);
+};
+
+function sample<T>(f: Stream<T>, init: T): T;
+
+function sample<T>(f: Stream<T>, init?: T): T | undefined {
+  f(x => init = x)();
+  return init;
+}
+
+const select = (label: string) => {
+  const options = ['Small', 'Medium', 'Large'];
+  const [currIdx, setCurrIdx] = useState(1);
+  const selected = useOneHot(currIdx);
+  return Div({
+    margin: '16px',
+    width: '120px',
+    height: '19px',
+    backgroundColor: '#666768',
+    borderRadius: '3px',
+    boxShadow: '0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
+    paddingLeft: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    color: '#ffffff',
+    overflow: 'hidden',
+    position: 'relative',
+    cursor: 'default',
+  }, [
+    Text(map(currIdx, x => options[x])),
+    Div({
+      backgroundImage: 'linear-gradient(#3367df, #255cc6)',
+      width: '16px',
+      alignSelf: 'stretch',
+    }, [
+      nsChevronIcon({ style: {
+        transform: 'translate(1px, 2.5px)',
+      }}),
+    ]),
+    gloss,
+  ], [
+    r => {
+      const m = menu([
+        menuItem({ label: 'Small', checked: selected(0), action: () => setCurrIdx(0) }),
+        menuItem({ label: 'Medium', checked: selected(1), action: () => setCurrIdx(1) }),
+        menuItem({ label: 'Large', checked: selected(2), action: () => setCurrIdx(2) }),
+      ], 13);
+      const open = (e: MouseEvent) => {
+        const rect = r.getBoundingClientRect();
+        openMenu(m, rect.left - 13, rect.top - 18 * sample(currIdx, 0));
+      };
+      return Event('mousedown', open)(r);
+    },
+  ]);
+};
+
+type Menu = (handler: Handler<Thunk>) => Component;
+
+type MenuComponent = (size: number, handler: Handler<Thunk>) => Component;
+
+const menu = (contents: MenuComponent[], size = 14, dropdown = false): Menu => h => Div({
   padding: '4px 0',
   backgroundColor: '#323334',
   borderRadius: dropdown ? '0 0 5px 5px' : '5px',
   boxShadow: '0 0 0 .5px rgba(0, 0, 0, .8), 0 10px 20px rgba(0, 0, 0, .3)',
   position: 'relative',
   whiteSpace: 'nowrap',
+  transform: 'translateY(-.5px)'
 }, [
-  ...contents,
+  ...contents.map(x => x(size, h)),
   dropdown ? dropdownBorderOverlay : borderOverlay,
 ]);
 
 const either = <T>(s: Stream<boolean>, a: T, b: T) => map(s, x => x ? a : b);
 
-const menuItem = (label: string, onClick: Handler<MouseEvent> = () => {}): Component => {
-  const [hover, setHover] = useState(false);
+const menuItem = ({ label, action = noop, checked = just(false) }: {
+  label: string;
+  action?: Thunk;
+  checked?: Stream<boolean>;
+}) => (fontSize: number, handler: Handler<Thunk>): Component => {
+  const [highlight, setHighlight] = useState(false);
   return Div({
-    height: '19px',
-    fontSize: '14px',
-    backgroundColor: either(hover, '#336dd9', 'transparent'),
+    height: `${fontSize + 5}px`,
+    fontSize: `${fontSize}px`,
+    backgroundColor: either(highlight, '#336dd9', 'transparent'),
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     padding: '0 21px',
     cursor: 'default',
-  }, [span({}, [label])], [Hover(setHover), Event('click', onClick)]);
+    position: 'relative',
+  }, [
+    menuCheck(fontSize, checked),
+    span({}, [label]),
+  ], [
+    Hover(setHighlight),
+    Event('click', e => {
+      setHighlight(false);
+      setTimeout(() => {
+        setHighlight(true);
+        handler(action);
+      }, 60);
+    }),
+  ]);
 };
+
+const menuCheck = (size: number, visible: Stream<boolean>) => mCheckIcon({
+  size,
+  style: {
+    position: 'absolute',
+    top: '50%',
+    left: '11px',
+    transform: 'translate(-50%, -50%)',
+    pointerEvents: 'none',
+  },
+  effects: [
+    r => visible(x => r.style.opacity = x ? '1' : '0'),
+  ],
+});
 
 const menuSeparator = () => Div({
   height: '2px',
@@ -1248,7 +1446,7 @@ const gloss = Div({
 });
 
 const streamComp = (s: Stream<Component>): Component => r => {
-  let old = () => {};
+  let old = noop;
   const unsub = s(x => {
     old();
     old = x(r);
@@ -1257,7 +1455,7 @@ const streamComp = (s: Stream<Component>): Component => r => {
 };
 
 // Component that does nothing.
-const empty: Component = () => () => {};
+const empty: Component = () => noop;
 
 const enable = (s: Stream<boolean>, c: Component) => streamComp(map(s, x => x ? c : empty));
 
@@ -1337,29 +1535,29 @@ function StaticDesktop(...windows: Window[]) {
     position: 'relative',
   }, contents, [
     ContextMenu(menu([
-      menuItem('New Folder'),
-      menuSeparator(),
-      menuItem('Get Info'),
-      menuSeparator(),
-      menuItem('Import from iPhone or iPad'),
-      menuSeparator(),
-      menuItem('Change Desktop Background...'),
-      menuItem('Use Stacks'),
-      menuItem('Sort By'),
-      menuItem('Clean Up'),
-      menuItem('Clean Up By'),
-      menuItem('Show View Options'),
+      menuItem({ label: 'New Folder' }),
+      menuSeparator,
+      menuItem({ label: 'Get Info' }),
+      menuSeparator,
+      menuItem({ label: 'Import from iPhone or iPad' }),
+      menuSeparator,
+      menuItem({ label: 'Change Desktop Background...' }),
+      menuItem({ label: 'Use Stacks' }),
+      menuItem({ label: 'Sort By' }),
+      menuItem({ label: 'Clean Up' }),
+      menuItem({ label: 'Clean Up By' }),
+      menuItem({ label: 'Show View Options' }),
     ])),
   ]);
 }
 
-const useDynamicContent = (): [Component, (x: Component) => Cleanup] => {
+const useDynamicContent = (x: Effect = empty): [Component, (x: Component) => Cleanup] => {
   const [content, emitContent] = useStream<[number, Component?]>();
   const nextId = counter();
   const c: Component = r => {
     const box = elem('div');
     const removers = {} as any;
-    return cleanup([
+    return cleanup(
       content(([k, x]) => {
         if (x) {
           removers[k] = render(x, box);
@@ -1368,8 +1566,9 @@ const useDynamicContent = (): [Component, (x: Component) => Cleanup] => {
           delete removers[k];
         }
       }),
+      x(box),
       mount(box, r),
-    ]);
+    );
   };
   const addContent = (c: Component) => {
     const k = nextId();
@@ -1379,19 +1578,30 @@ const useDynamicContent = (): [Component, (x: Component) => Cleanup] => {
   return [c, addContent];
 };
 
-type OneHotStreams = (x: number) => Stream<boolean>;
-type OneHotSetter = Handler<number | undefined>;
-type OneHot = [OneHotStreams, OneHotSetter];
-
-const useOneHot = (): OneHot => {
-  let curr: number | undefined;
-  const streams: {[k: number]: [Stream<boolean>, Handler<boolean>]} = {};
-  const getter = (k: number) => {
-    if (!streams[k]) {
-      streams[k] = useState(k === curr);
-    }
-    return streams[k][0];
+/**
+ * A posaphore is an object that wraps some temporary `f`. The wrapped
+ * temporary will be enabled whenever at least one instance of the posaphore
+ * is active.
+ */
+const posaphore = (f: Temporary) => {
+  let active = 0;
+  let unsubscribe: Unsubscriber;
+  const decr = () => {
+    active -= 1;
+    if (active === 0) unsubscribe();
   };
+  const incr = () => {
+    if (active === 0) unsubscribe = f();
+    active += 1;
+    return decr;
+  }
+  return incr;
+};
+
+type OneHotStreams = (x: number) => Stream<boolean>;
+
+const useOneHot = (s: Stream<number | undefined>): OneHotStreams => {
+  let curr: number | undefined;
   const setter = (x: number | undefined) => {
     if (x === curr) return;
     if (curr !== undefined && streams[curr]) {
@@ -1401,8 +1611,21 @@ const useOneHot = (): OneHot => {
     if (x !== undefined && streams[x]) {
       streams[x][1](true);
     }
-  }
-  return [getter, setter];
+  };
+  const incr = posaphore(() => s(setter));
+  const streams: {[k: number]: [Stream<boolean>, Handler<boolean>]} = {};
+  const getter = (k: number): Stream<boolean> => {
+    if (streams[k]) return streams[k][0];
+    const [oh, soh] = useStream<boolean>();
+    const foh: Stream<boolean> = h => {
+      const decr = incr();
+      h(curr === k);
+      return cleanup(oh(h), decr);
+    };
+    streams[k] = [foh, soh];
+    return foh;
+  };
+  return getter;
 };
 
 const menuBarItemStyle: Partial<CSSStyleDeclaration> = {
@@ -1450,40 +1673,15 @@ const menuBarLabel = (s: string, fontWeight = '400') => {
   return item;
 }
 
-const MenuBar = (mainMenu: Component): Component => r => {
-
-  function showMenuIn(menu: Component, r: HTMLElement) {
-    const c = elem('div');
-    c.style.position = 'absolute';
-    c.style.top = '100%';
-    c.style.left = '0';
-    c.style.zIndex = '0';
-    c.style.transition = 'opacity .25s ease-in';
-
-    const cu = cleanup([
-      render(menu, c),
-      mount(c, r.appendChild(marker())),
-    ]);
-    return (fade: boolean) => {
-      if (fade) {
-        c.style.opacity = '0';
-        setTimeout(cu, 150);
-      } else {
-        cu();
-      }
-    };
-  }
+const MenuBar = (mainMenu: Menu): Component => r => {
 
   const us = [];
 
   const [activeItem, setActiveItem] = useState<number | undefined>(undefined);
-  const [itemActive, setItemActive] = useOneHot();
+  const itemActive = useOneHot(activeItem);
 
   // Menu bar is "active" if any individual menu item is active.
   const active = map(activeItem, x => x !== undefined);
-
-  // Connect the active item state to the one-hot functions.
-  us.push(activeItem(setItemActive));
 
   const ami = elem('div');
   Object.assign(ami.style, menuBarItemStyle);
@@ -1519,8 +1717,8 @@ const MenuBar = (mainMenu: Component): Component => r => {
 
   let curr: any;
   activeItem(x => {
-    if (curr) curr(x === undefined);
-    curr = x !== undefined ? showMenuIn(mainMenu, items[x]) : undefined;
+    if (curr) curr(x !== undefined);
+    curr = x !== undefined ? showMenuIn(mainMenu, items[x], () => setActiveItem(undefined)) : undefined;
   });
 
   us.push(
@@ -1534,10 +1732,9 @@ const MenuBar = (mainMenu: Component): Component => r => {
   );
 
   // Whenever we become active, enable extra stuff.
-  us.push(triggerEffect(active, () => cleanup([
-    Event('mousedown', () => setActiveItem(undefined), true)(document.body),
+  us.push(triggerEffect(active, () => cleanup(
     ...items.map((x, i) => Event('mouseenter', () => setActiveItem(i))(x.children[0])),
-  ])));
+  )));
 
   us.push(Div({
     height: '22px',
@@ -1559,10 +1756,10 @@ const MenuBar = (mainMenu: Component): Component => r => {
     ...items,
   ])(r));
 
-  return cleanup(us);
+  return cleanup(...us);
 };
 
-const Desktop = (env: WindowStream, mainMenu: Component): Component => r => {
+const Desktop = (env: WindowStream, mainMenu: Menu): Component => r => {
   const [dynContent, addContent] = useDynamicContent();
   env(x => {
     const comp = windowFrame(x.frame, x.zIndex, x.handles, x.content);
@@ -1576,24 +1773,24 @@ const Desktop = (env: WindowStream, mainMenu: Component): Component => r => {
     position: 'relative',
   }, [MenuBar(mainMenu), dynContent], [
     ContextMenu(menu([
-      menuItem('New Folder'),
-      menuSeparator(),
-      menuItem('Get Info'),
-      menuSeparator(),
-      menuItem('Import from iPhone or iPad'),
-      menuSeparator(),
-      menuItem('Change Desktop Background...'),
-      menuItem('Use Stacks'),
-      menuItem('Sort By'),
-      menuItem('Clean Up'),
-      menuItem('Clean Up By'),
-      menuItem('Show View Options'),
+      menuItem({ label: 'New Folder' }),
+      menuSeparator,
+      menuItem({ label: 'Get Info' }),
+      menuSeparator,
+      menuItem({ label: 'Import from iPhone or iPad' }),
+      menuSeparator,
+      menuItem({ label: 'Change Desktop Background...' }),
+      menuItem({ label: 'Use Stacks' }),
+      menuItem({ label: 'Sort By' }),
+      menuItem({ label: 'Clean Up' }),
+      menuItem({ label: 'Clean Up By' }),
+      menuItem({ label: 'Show View Options' }),
     ])),
   ])(r);
 }
 
 function all(...es: Effect[]): Effect {
-  return n => cleanup(es.map(e => e(n)));
+  return n => cleanup(...es.map(e => e(n)));
 }
 
 function Event<Type extends keyof HTMLElementEventMap>(
@@ -1689,7 +1886,7 @@ function Clicking(h: Handler<boolean>, r?: Handler<MouseEvent>): Effect {
   };
 }
 
-function ContextMenu(menu: Component): Effect {
+function ContextMenu(menu: Menu): Effect {
   return Event('contextmenu', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -1697,31 +1894,76 @@ function ContextMenu(menu: Component): Effect {
   });
 }
 
-function showContextMenu(e: MouseEvent, menu: Component) {
+const wait = (dt: number) => new Promise(r => setTimeout(r, dt * 1000));
 
-  // Create an overlay.
-  const o = elem('div');
-  o.style.position = 'absolute';
-  o.style.top = '0';
-  o.style.left = '0';
-  o.style.width = '100%';
-  o.style.height = '100%';
-  document.body.appendChild(o);
+const append = (c: Node, p: Node) => {
+  p.appendChild(c);
+  return () => void p.removeChild(c);
+};
 
+function showContextMenu(e: MouseEvent, menu: Menu) {
+  return openMenu(menu, e.clientX, e.clientY);
+}
+
+function openMenu(menu: Menu, x: number, y: number) {
   // Create a container.
   const c = elem('div');
-  c.style.position = 'absolute';
-  c.style.top = `${e.clientY - 3}px`;
-  c.style.left = `${e.clientX}px`;
-  c.style.transition = 'opacity .25s ease-in';
-  document.body.appendChild(c);
-  const u = render(menu, c);
+  const cStyle = c.style;
+  cStyle.position = 'absolute';
+  cStyle.zIndex = '102';
+  cStyle.top = `${y - 3}px`;
+  cStyle.left = `${x}px`;
+  cStyle.transition = 'opacity .2s ease-in';
 
-  o.addEventListener('mousedown', () => {
-    o.remove();
+  let u: Cleanup;
+
+  const close = () => {
     c.style.opacity = '0';
-    setTimeout(() => (u(), c.remove()), 250);
-  });
+    return wait(.2).then(u);
+  };
+
+  const handle = (t: Thunk) => close().then(t);
+
+  u = cleanup(
+    append(c, document.body),
+    render(menu(handle), c),
+    Event('mousedown', e => {
+      if (!c.contains(e.target as Node)) close();
+    }, true)(document.body)
+  );
+}
+
+function showMenuIn(menu: Menu, r: HTMLElement, onDismiss: Thunk) {
+  const c = elem('div');
+  c.style.position = 'absolute';
+  c.style.top = '100%';
+  c.style.left = '0';
+  c.style.zIndex = '0';
+  c.style.transition = 'opacity .2s ease-in';
+
+  let u: Cleanup;
+
+  // Function for closing it.
+  const close = (fast?: boolean) => {
+    if (fast) {
+      u();
+    } else {
+      c.style.opacity = '0';
+      return wait(.2).then(u);
+    }
+  };
+
+  const handle = (t: Thunk) => (onDismiss(), t());
+
+  u = cleanup(
+    append(c, r),
+    render(menu(handle), c),
+    Event('mousedown', e => {
+      if (!c.contains(e.target as Node)) onDismiss();
+    }, true)(document.body),
+  );
+
+  return close;
 }
 
 type DragEndHandler = (e: MouseEvent) => void;
@@ -1876,44 +2118,44 @@ env.open(Finder);
 
 const [windows, addWindow] = makeEnvironment();
 
-const plot = SimpleWindow("Yooo", Matte(Plot2D(just([0, 1]), just([0, 1]))));
+const plot = SimpleWindow("Yooo", Plot2D(just([0, 1]), just([0, 1])));
 
 const appleMenu = menu([
-  menuItem('About This Mac'),
-  menuSeparator(),
-  menuItem('System Preferences...'),
-  menuItem('App Store...'),
-  menuSeparator(),
-  menuItem('Recent Items'),
-  menuSeparator(),
-  menuItem('Force Quit...'),
-  menuSeparator(),
-  menuItem('Sleep'),
-  menuItem('Restart...'),
-  menuItem('Shut Down...'),
-  menuSeparator(),
-  menuItem('Lock Screen'),
-  menuItem('Log Out Toby Bell...'),
-], true);
+  menuItem({ label: 'About This Mac' }),
+  menuSeparator,
+  menuItem({ label: 'System Preferences...' }),
+  menuItem({ label: 'App Store...' }),
+  menuSeparator,
+  menuItem({ label: 'Recent Items' }),
+  menuSeparator,
+  menuItem({ label: 'Force Quit...' }),
+  menuSeparator,
+  menuItem({ label: 'Sleep' }),
+  menuItem({ label: 'Restart...' }),
+  menuItem({ label: 'Shut Down...' }),
+  menuSeparator,
+  menuItem({ label: 'Lock Screen' }),
+  menuItem({ label: 'Log Out Toby Bell...' }),
+], undefined, true);
 
 const safariMenu = menu([
-  menuItem('About Safari', () => addWindow(Finder)),
-  menuItem('Safari Extensions...', () => addWindow(plot)),
-  menuSeparator(),
-  menuItem('Preferences...'),
-  menuItem('Privacy Report...'),
-  menuItem('Settings for This Website...'),
-  menuSeparator(),
-  menuItem('Clear History...'),
-  menuSeparator(),
-  menuItem('Services'),
-  menuSeparator(),
-  menuItem('Hide Safari'),
-  menuItem('Hide Others'),
-  menuItem('Show All'),
-  menuSeparator(),
-  menuItem('Quit Safari'),
-], true);
+  menuItem({ label: 'About Safari', action: () => addWindow(Finder) }),
+  menuItem({ label: 'Safari Extensions...', action: () => addWindow(plot) }),
+  menuSeparator,
+  menuItem({ label: 'Preferences...' }),
+  menuItem({ label: 'Privacy Report...' }),
+  menuItem({ label: 'Settings for This Website...' }),
+  menuSeparator,
+  menuItem({ label: 'Clear History...' }),
+  menuSeparator,
+  menuItem({ label: 'Services' }),
+  menuSeparator,
+  menuItem({ label: 'Hide Safari' }),
+  menuItem({ label: 'Hide Others' }),
+  menuItem({ label: 'Show All' }),
+  menuSeparator,
+  menuItem({ label: 'Quit Safari' }),
+], undefined, true);
 
 const dt = Desktop(windows, safariMenu);
 
@@ -1921,4 +2163,4 @@ render(dt, document.body);
 
 addWindow(Finder);
 addWindow(Finder);
-addWindow(plot);
+// addWindow(plot);
