@@ -1,5 +1,4 @@
 import { ticks, scaleLinear } from 'd3';
-import { remove, xor } from 'lodash';
 
 export {};
 
@@ -14,7 +13,7 @@ type Values<T> = T | Stream<T>;
 const noop = () => {};
 
 /** Stream that just produces a fixed value. */
-const just = <T>(x: T): Stream<T> => h => (h(x), noop);
+const just = <T>(x: T) => ((h?: Handler<T>) => h ? (h(x), noop) : x) as State<T>;
 
 /** Stream that produces no/unit value at a given period. */
 const tick = (dt: number): Stream<void> => h => {
@@ -128,11 +127,8 @@ const join = <T extends readonly any[]>(ss: {[K in keyof T]: Stream<T[K]>}): Str
   };
 };
 
-
 /**
  * Join an object of streams into a stream of objects.
- *
- * TODO: I want a better API for this.
  */
 const joinObj = <T extends {}>(streams: {[K in keyof T]: Stream<T[K]>}): Stream<{[K in keyof T]: T[K]}> => {
   const keys = Object.keys(streams) as any as (keyof T)[];
@@ -158,13 +154,34 @@ const time = (dt: number) => map(tick(dt), () => performance.now() / 1000);
 /** Stream that produces alternating `true`/`false` values. */
 const square = (dt: number) => reduce(tick(dt), a => !a, false);
 
+type State<T> = {
+  (): T;
+  (h: Handler<T>): Unsubscriber;
+}
+
+function useGState<T>(init: T): [State<T>, Handler<T>] {
+  let curr = init;
+  let handlers = new Set<Handler<T>>();
+  const get = (h?: Handler<T>) => {
+    if (!h) return curr;
+    handlers.add(h);
+    h(curr);
+    return () => { handlers.delete(h); };
+  };
+  const set = (x: T) => {
+    curr = x;
+    handlers.forEach(h => h(x));
+  };
+  return [get as State<T>, set];
+}
+
 function useState<T>(initial: T): [Stream<T>, Handler<T>] {
   let curr = initial;
   let handlers = new Set<Handler<T>>();
   const state: Stream<T> = (h: Handler<T>) => {
     handlers.add(h);
     h(curr);
-    return () => handlers.delete(h);
+    return () => { handlers.delete(h); };
   };
   const setState = (x: T) => {
     curr = x;
@@ -404,15 +421,17 @@ type RectSize = [number, number]; // width, height
 // it's interested in, and a way for it to give the plot that data.
 
 const Plot2D = (
-  xlim: Stream<Limits>,
-  ylim: Stream<Limits>,
+  xlim: State<Limits>,
+  ylim: State<Limits>,
+  onSetXLim: Handler<Limits>,
+  onSetYLim: Handler<Limits>,
 ): Component => r => {
   const container = elem('div');
   const canvas = elem('canvas');
   container.appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
-  const [size, setSize] = useState<RectSize>([0, 0]);
+  const [size, setSize] = useState([0, 0] as RectSize);
 
   let y = Math.random();
   const N = 1000;
@@ -452,9 +471,44 @@ const Plot2D = (
   canvas.style.top = '0';
   canvas.style.left = '0';
 
-  const cleanups = [];
+  const cleanups: Cleanup[] = [];
+
+  const xs = scaleLinear();
+  const ys = scaleLinear();
 
   if (ctx) {
+    let x0 = 0;
+    let y0 = 0;
+    const updateDrag = (e: MouseEvent) => {
+      const [xda, xdb] = xs.domain();
+      const [xra, xrb] = xs.range();
+      const xt = (e.clientX - xra) / (xrb - xra);
+      const xSpread = xdb - xda;
+      const xLo = x0 - xt * xSpread;
+      onSetXLim([xLo, xLo + xSpread]);
+
+      const [yda, ydb] = ys.domain();
+      const [yra, yrb] = ys.range();
+      const yt = (e.clientY - yra) / (yrb - yra);
+      const ySpread = ydb - yda;
+      const yLo = y0 - yt * ySpread;
+      onSetYLim([yLo, yLo + ySpread]);
+    };
+    const finishDrag = (e: MouseEvent) => {
+      cleanupDrag();
+    };
+    const cleanupDrag = () => {
+      window.removeEventListener('mousemove', updateDrag);
+      window.removeEventListener('mouseup', finishDrag);
+    };
+    cleanups.push(Event('mousedown', e => {
+      x0 = xs.invert(e.clientX);
+      y0 = ys.invert(e.clientY);
+      window.addEventListener('mousemove', updateDrag);
+      window.addEventListener('mouseup', finishDrag);
+    })(canvas));
+    cleanups.push(cleanupDrag);
+
     cleanups.push(size(([w, h]) => {
       canvas.width = w * 2;
       canvas.height = h * 2;
@@ -491,8 +545,8 @@ const Plot2D = (
       const xMid = (left + right) / 2;
       const yMid = (top + bottom) / 2;
       const xts = ticks(xMin, xMax, Math.abs(right - left) / 60);
-      const xs = scaleLinear([left, right]).domain([xMin, xMax]);
-      const ys = scaleLinear([bottom, top]).domain([yMin, yMax]);
+      xs.domain([xMin, xMax]).range([left, right]);
+      ys.domain([yMin, yMax]).range([bottom, top]);
       ctx.fillStyle = '#000';
       ctx.lineWidth = 1;
 
@@ -572,8 +626,9 @@ const Plot2D = (
 
   }
 
-  return mount(container, r);
+  cleanups.push(mount(container, r));
 
+  return cleanup(...cleanups);
 };
 
 const FillLayer = (
@@ -1797,7 +1852,7 @@ function Event<Type extends keyof HTMLElementEventMap>(
   t: Type,
   h: Handler<HTMLElementEventMap[Type]>,
   capture?: boolean,
-): Effect {
+): Temporary<EventTarget> {
   return n => {
     n.addEventListener(t, h, capture);
     return () => n.removeEventListener(t, h, capture);
@@ -2118,7 +2173,10 @@ env.open(Finder);
 
 const [windows, addWindow] = makeEnvironment();
 
-const plot = SimpleWindow("Yooo", Plot2D(just([0, 1]), just([0, 1])));
+
+const [xlim, setXlim] = useGState([0, 1] as Limits);
+const [ylim, setYlim] = useGState([0, 1] as Limits);
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim));
 
 const appleMenu = menu([
   menuItem({ label: 'About This Mac' }),
