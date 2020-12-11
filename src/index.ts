@@ -4,7 +4,7 @@ export {};
 
 type Unsubscriber = () => void;
 type Handler<T> = (x: T) => void;
-type Thunk = Handler<void>;
+type Thunk = () => void;
 type Stream<T> = (f: Handler<T>) => Unsubscriber;
 type Contents<T> = T extends Stream<infer U> ? U : never;
 type Values<T> = T | Stream<T>;
@@ -228,7 +228,7 @@ interface FrameHandles {
 }
 
 interface WindowControls {
-  close(e: void): void;
+  close(): void;
   minimize(): void;
   maximize(): void;
   focus(): void;
@@ -239,7 +239,13 @@ function cleanup(...debts: Unsubscriber[]) {
   return () => debts.forEach(x => x());
 }
 
-function windowFrame(frame: Stream<Frame>, zIndex: Stream<number>, resize: FrameHandles, content: Component): Component {
+function windowFrame(
+  frame: Stream<Frame>,
+  zIndex: Stream<number>,
+  resize: FrameHandles,
+  content: Component,
+  focus: Stream<void>,
+  onFocus?: Thunk): Component {
   return r => {
     const debts = [];
     const div = document.createElement('div');
@@ -263,6 +269,18 @@ function windowFrame(frame: Stream<Frame>, zIndex: Stream<number>, resize: Frame
     div.appendChild(bottomDragger(resize.bottom));
     div.appendChild(leftDragger(resize.left));
     div.appendChild(rightDragger(resize.right));
+    onFocus && div.addEventListener('mousedown', onFocus, true);
+
+    // Whenever we get focused, move ourselves to the end of our parent?
+    debts.push(focus(() => {
+      // This is a sort of temporary hack to deal with the fact that some click
+      // handlers get disrupted when we call `appendChild`. If we got rid of all
+      // `click` events and just turned them into `mousedown`/`mouseup` events,
+      // this might not be necessary.
+      if (div !== div.parentNode?.lastChild) {
+        div.parentNode?.appendChild(div);
+      }
+    }));
 
     debts.push(mount(div, r));
 
@@ -306,7 +324,6 @@ function finder(expanded: Stream<boolean>, setExpanded: any, c: WindowControls) 
     menuBar(c.handles.middle, c.close),
     Div({
       flex: '1 0 0',
-      position: 'relative',
       display: 'flex',
       alignItems: 'stretch',
     }, [
@@ -317,7 +334,7 @@ function finder(expanded: Stream<boolean>, setExpanded: any, c: WindowControls) 
         radio(a(2), () => setWhich(2)),
         checkbox(...useState(false)),
         checkbox(...useState(true)),
-        select('Medium'),
+        select(),
         slider(...useState(.5)),
       ]),
     ]),
@@ -348,13 +365,14 @@ function elem<K extends keyof HTMLElementTagNameMap>(s: K, p?: HTMLElement) {
   return e;
 }
 
-function marker() {
-  return document.createComment('');
-}
+/** Create an invisible node to use as a placeholder/marker in the DOM. */
+const marker = () => document.createComment('');
 
 /** Render a component into a container. */
 function render(c: Component, p: Node) {
-  return c(p.appendChild(marker()));
+  const m = marker();
+  p.appendChild(m);
+  return cleanup(c(m), () => m.remove());
 }
 
 const Text = (s: Stream<string>): Component => r => {
@@ -419,12 +437,39 @@ type RectSize = [number, number]; // width, height
 // "Data provider."
 // A data provider needs a way for the plot to tell it what regions of data
 // it's interested in, and a way for it to give the plot that data.
+//
+// Could the plot subscribe to regions of data? The plot might say, I am
+// interested in region [0, 5]. Then the data notifies the plot whenever the
+// regions change?
+
+// The plot needs to be able to sample data at granular resolution, 
+
+interface Data {
+  x: number[];
+  y: number[];
+}
+
+const makeData = () => {
+  let x = 0;
+  let y = Math.random();
+  const N = 1000;
+  const dataX = [x];
+  const data = [y];
+  for (let i = 0; i < N; i += 1) {
+    x += .002 * Math.random();
+    y += .05 * Math.random() - .025;
+    dataX.push(x);
+    data.push(y);
+  }
+  return { x: dataX, y: data };
+}
 
 const Plot2D = (
   xlim: State<Limits>,
   ylim: State<Limits>,
   onSetXLim: Handler<Limits>,
   onSetYLim: Handler<Limits>,
+  data: State<Data>,
 ): Component => r => {
   const container = elem('div');
   const canvas = elem('canvas');
@@ -432,14 +477,6 @@ const Plot2D = (
   const ctx = canvas.getContext('2d');
 
   const [size, setSize] = useState([0, 0] as RectSize);
-
-  let y = Math.random();
-  const N = 1000;
-  const data = [y];
-  for (let i = 0; i < N; i += 1) {
-    y += .05 * Math.random() - .025;
-    data.push(y);
-  }
 
   const o = new ResizeObserver(entries => {
     const entry = entries[entries.length - 1];
@@ -451,7 +488,6 @@ const Plot2D = (
 
   container.style.width = '100%';
   container.style.height = '100%';
-  container.style.position = 'relative';
   o.observe(container);
 
   const title = just('Stock price');
@@ -517,7 +553,7 @@ const Plot2D = (
       ctx.scale(2, 2);
     }));
 
-    const axisConfig = joinObj({ size, xlim, ylim, xLabel, yLabel, title });
+    const axisConfig = joinObj({ size, xlim, ylim, xLabel, yLabel, title, data });
 
     interface AxisConfig {
       size: RectSize;
@@ -526,12 +562,13 @@ const Plot2D = (
       title?: string;
       xLabel?: string;
       yLabel?: string;
+      data: Data;
     }
 
     // Whenever width changes, need to compute a new left and right.
     // Whenever height changes, 
 
-    const drawAxes = ({ xLabel, yLabel, title, size: [width, height], xlim: [xMin, xMax], ylim: [yMin, yMax] }: AxisConfig) => {
+    const drawAxes = ({ xLabel, yLabel, title, size: [width, height], xlim: [xMin, xMax], ylim: [yMin, yMax], data }: AxisConfig) => {
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, width, height);
 
@@ -574,12 +611,13 @@ const Plot2D = (
       }
       ctx.stroke();
 
-      // Draw series
+      const {x: dx, y: dy} = data;
+      const N = dx.length;
       ctx.strokeStyle = '#2965CC';
       ctx.beginPath();
-      ctx.moveTo(xs(0), ys(data[0]));
+      ctx.moveTo(xs(dx[0]), ys(dy[0]));
       for (let i = 1; i <= N; i += 1) {
-        ctx.lineTo(xs(i / N), ys(data[i]));
+        ctx.lineTo(xs(dx[i]), ys(dy[i]));
       }
       ctx.stroke();
 
@@ -623,7 +661,6 @@ const Plot2D = (
     };
 
     cleanups.push(axisConfig(drawAxes));
-
   }
 
   cleanups.push(mount(container, r));
@@ -826,7 +863,6 @@ const windowButton = (
     borderRadius: '6px',
     backgroundColor: color,
     marginLeft: '8px',
-    position: 'relative',
   }, [
     content,
   ], [
@@ -840,7 +876,6 @@ function simpleTitleBar(title: string, windowDrag: Handler<MouseEvent>, onClose:
     backgroundColor: '#3d3e3f',
     boxShadow: '0 -1px 0 rgba(0, 0, 0, 0.24) inset, 0 -.5px 0 #000 inset',
     overflow: 'scroll',
-    position: 'relative',
   }, [
     titleBar(title, onClose),
   ], [
@@ -854,7 +889,6 @@ function menuBar(windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
     backgroundColor: '#3d3e3f',
     boxShadow: '0 -1px 0 rgba(0, 0, 0, 0.24) inset, 0 -.5px 0 #000 inset',
     overflow: 'scroll',
-    position: 'relative',
   }, [
     titleBar('Ribs — zsh — Solarized Dark – 98x26', onClose),
     toolbar(
@@ -1256,7 +1290,6 @@ const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) => {
     margin: '16px',
     backgroundImage: map(active, x => x ? 'linear-gradient(#3367df, #255cc6)' : 'linear-gradient(#505152, #6b6c6c)'),
     boxShadow: '0 .5px 1px -.5px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 .5px 1px rgba(0, 0, 0, .4)',
-    position: 'relative',
     overflow: 'hidden',
   }, [
     Div({
@@ -1289,7 +1322,6 @@ const checkbox = (state: Stream<boolean>, onChange?: Handler<boolean>) => {
     margin: '16px',
     backgroundImage: either(state, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
     boxShadow: '0 1px 1px -1px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
-    position: 'relative',
     overflow: 'hidden',
   }, [
     enable(state, checkmark()),
@@ -1304,7 +1336,6 @@ const slider = (
     value: Stream<number>,
     onChange: Handler<number> = noop) => {
   return Div({
-    position: 'relative',
     height: '15px',
     margin: '16px',
   }, [
@@ -1371,8 +1402,8 @@ function sample<T>(f: Stream<T>, init?: T): T | undefined {
   return init;
 }
 
-const select = (label: string) => {
-  const options = ['Small', 'Medium', 'Large'];
+const select = () => {
+  const options = ['Small', 'Medium', 'Large', 'Death', 'Travel'];
   const [currIdx, setCurrIdx] = useState(1);
   const selected = useOneHot(currIdx);
   return Div({
@@ -1388,7 +1419,6 @@ const select = (label: string) => {
     justifyContent: 'space-between',
     color: '#ffffff',
     overflow: 'hidden',
-    position: 'relative',
     cursor: 'default',
   }, [
     Text(map(currIdx, x => options[x])),
@@ -1404,11 +1434,14 @@ const select = (label: string) => {
     gloss,
   ], [
     r => {
-      const m = menu([
-        menuItem({ label: 'Small', checked: selected(0), action: () => setCurrIdx(0) }),
-        menuItem({ label: 'Medium', checked: selected(1), action: () => setCurrIdx(1) }),
-        menuItem({ label: 'Large', checked: selected(2), action: () => setCurrIdx(2) }),
-      ], 13);
+      const m = menu(
+        options.map((x, i) => menuItem({
+          label: x,
+          checked: selected(i),
+          action: () => setCurrIdx(i),
+        })),
+        13,
+      );
       const open = (e: MouseEvent) => {
         const rect = r.getBoundingClientRect();
         openMenu(m, rect.left - 13, rect.top - 18 * sample(currIdx, 0));
@@ -1427,7 +1460,6 @@ const menu = (contents: MenuComponent[], size = 14, dropdown = false): Menu => h
   backgroundColor: '#323334',
   borderRadius: dropdown ? '0 0 5px 5px' : '5px',
   boxShadow: '0 0 0 .5px rgba(0, 0, 0, .8), 0 10px 20px rgba(0, 0, 0, .3)',
-  position: 'relative',
   whiteSpace: 'nowrap',
   transform: 'translateY(-.5px)'
 }, [
@@ -1452,7 +1484,6 @@ const menuItem = ({ label, action = noop, checked = just(false) }: {
     alignItems: 'center',
     padding: '0 21px',
     cursor: 'default',
-    position: 'relative',
   }, [
     menuCheck(fontSize, checked),
     span({}, [label]),
@@ -1510,7 +1541,7 @@ const streamComp = (s: Stream<Component>): Component => r => {
 };
 
 // Component that does nothing.
-const empty: Component = () => noop;
+const empty: Temporary<any> = () => noop;
 
 const enable = (s: Stream<boolean>, c: Component) => streamComp(map(s, x => x ? c : empty));
 
@@ -1520,6 +1551,8 @@ interface WindowRecord {
   handles: FrameHandles;
   content: Component;
   close: Stream<void>;
+  focuses: Stream<void>;
+  focus: Thunk;
 }
 
 type WindowStream = Stream<WindowRecord>;
@@ -1541,13 +1574,14 @@ const makeEnvironment = (): [WindowStream, WindowAdder] => {
     const k = nextId();
     const [frame, handles] = useFrame({ x: 100, y: 100, width: 500, height: 400 });
     const [$close, close] = useStream();
+    const [$focus, focus] = useStream();
     const zIndex = just(0);
     const content = w({
       close: () => closeWindow(k),
       handles,
       minimize: null as any,
       maximize: null as any,
-      focus: null as any,
+      focus: focus as Thunk,
     });
     windows[k] = [close, {
       frame,
@@ -1555,6 +1589,8 @@ const makeEnvironment = (): [WindowStream, WindowAdder] => {
       handles,
       content,
       close: $close,
+      focuses: $focus,
+      focus: focus as Thunk,
     }];
     emitWindow(windows[k][1]);
   };
@@ -1579,7 +1615,7 @@ function StaticDesktop(...windows: Window[]) {
       handles,
     };
     const content = window(ctrl);
-    const comp = windowFrame(frame, just(0), handles, content);
+    const comp = windowFrame(frame, just(0), handles, content, empty);
     contents.push(comp);
   }
 
@@ -1587,7 +1623,6 @@ function StaticDesktop(...windows: Window[]) {
     backgroundColor: '#000000',
     width: '100vw',
     height: '100vh',
-    position: 'relative',
   }, contents, [
     ContextMenu(menu([
       menuItem({ label: 'New Folder' }),
@@ -1605,33 +1640,6 @@ function StaticDesktop(...windows: Window[]) {
     ])),
   ]);
 }
-
-const useDynamicContent = (x: Effect = empty): [Component, (x: Component) => Cleanup] => {
-  const [content, emitContent] = useStream<[number, Component?]>();
-  const nextId = counter();
-  const c: Component = r => {
-    const box = elem('div');
-    const removers = {} as any;
-    return cleanup(
-      content(([k, x]) => {
-        if (x) {
-          removers[k] = render(x, box);
-        } else if (removers[k]) {
-          removers[k]();
-          delete removers[k];
-        }
-      }),
-      x(box),
-      mount(box, r),
-    );
-  };
-  const addContent = (c: Component) => {
-    const k = nextId();
-    emitContent([k, c]);
-    return () => emitContent([k]);
-  }
-  return [c, addContent];
-};
 
 /**
  * A posaphore is an object that wraps some temporary `f`. The wrapped
@@ -1685,7 +1693,6 @@ const useOneHot = (s: Stream<number | undefined>): OneHotStreams => {
 
 const menuBarItemStyle: Partial<CSSStyleDeclaration> = {
   height: '100%',
-  position: 'relative',
 };
 
 const menuBarLabelStyle: Partial<CSSStyleDeclaration> = {
@@ -1697,7 +1704,6 @@ const menuBarLabelStyle: Partial<CSSStyleDeclaration> = {
   color: '#ffffff',
   fontSize: '14px',
   cursor: 'default',
-  position: 'relative',
   zIndex: '2',
 };
 
@@ -1745,7 +1751,6 @@ const MenuBar = (mainMenu: Menu): Component => r => {
   Object.assign(amiLabel.style, {
     width: '35px',
     height: '100%',
-    position: 'relative',
     zIndex: '2',
   });
   us.push( render(appleMenuIcon({ style: { transform: 'translateX(6.5px)' }}), amiLabel) );
@@ -1797,7 +1802,6 @@ const MenuBar = (mainMenu: Menu): Component => r => {
     flexFlow: 'row nowrap',
     paddingLeft: '10px',
     zIndex: '100',
-    position: 'relative',
   }, [
     Div({
       position: 'absolute',
@@ -1815,18 +1819,11 @@ const MenuBar = (mainMenu: Menu): Component => r => {
 };
 
 const Desktop = (env: WindowStream, mainMenu: Menu): Component => r => {
-  const [dynContent, addContent] = useDynamicContent();
-  env(x => {
-    const comp = windowFrame(x.frame, x.zIndex, x.handles, x.content);
-    x.close(addContent(comp));
-  });
-
   return Div({
     backgroundColor: '#000000',
     width: '100vw',
     height: '100vh',
-    position: 'relative',
-  }, [MenuBar(mainMenu), dynContent], [
+  }, [MenuBar(mainMenu)], [
     ContextMenu(menu([
       menuItem({ label: 'New Folder' }),
       menuSeparator,
@@ -1841,6 +1838,10 @@ const Desktop = (env: WindowStream, mainMenu: Menu): Component => r => {
       menuItem({ label: 'Clean Up By' }),
       menuItem({ label: 'Show View Options' }),
     ])),
+    box => env(x => {
+      const frame = windowFrame(x.frame, x.zIndex, x.handles, x.content, x.focuses, x.focus);
+      x.close(render(frame, box));
+    }),
   ])(r);
 }
 
@@ -2173,10 +2174,24 @@ env.open(Finder);
 
 const [windows, addWindow] = makeEnvironment();
 
+const makeAppendData = () => {
+  const [data, setData] = useGState(makeData());
+  const under = data();
+  const append = (x: number, y: number) => {
+    under.x.push(x);
+    under.y.push(y);
+    setData(under);
+  };
+  return [data, append] as [State<Data>, (x: number, y: number) => void];
+};
+
+const [data, appendPoint] = makeAppendData();
 
 const [xlim, setXlim] = useGState([0, 1] as Limits);
 const [ylim, setYlim] = useGState([0, 1] as Limits);
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim));
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, data));
+
+// setInterval(() => appendPoint(Math.random(), Math.random()), 500);
 
 const appleMenu = menu([
   menuItem({ label: 'About This Mac' }),
