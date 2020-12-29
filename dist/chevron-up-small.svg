@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 22 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <rect id="chevron-up-small" x="0" y="0" width="22" height="20" style="fill:none;"/>
+    <path d="M5.414,14.586C5.149,14.32 5,13.961 5,13.586C5,13.211 5.149,12.851 5.414,12.586C6.593,11.407 8.33,9.67 9.293,8.707C9.746,8.254 10.36,8 11,8C11,8 11,8 11,8C11.64,8 12.254,8.254 12.707,8.707C13.627,9.627 15.272,11.272 16.586,12.586C17.138,13.138 17.138,14.033 16.586,14.586C16.586,14.586 16.586,14.586 16.586,14.586C16.32,14.851 15.961,15 15.586,15C15.211,15 14.851,14.851 14.586,14.586C12.879,12.879 11,11 11,11C11,11 8.873,13.127 7.414,14.586C6.862,15.138 5.967,15.138 5.414,14.586C5.414,14.586 5.414,14.586 5.414,14.586Z"/>
+</svg>
