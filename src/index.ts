@@ -14,6 +14,7 @@ import { Finder } from './finder';
 import { menu, menuItem, menuSeparator } from './menu';
 import { desktop } from './desktop';
 import { emitterApp } from './emitter-app';
+import { WifiApp } from './wifi-app';
 
 type Handler<T> = (x: T) => void;
 
@@ -401,7 +402,7 @@ const safariMenu = menu([
   menuItem({ label: 'Safari Extensions...', action: () => addWindow(plot) }),
   menuSeparator,
   menuItem({ label: 'Preferences...', action: () => addWindow(emitterApp) }),
-  menuItem({ label: 'Privacy Report...' }),
+  menuItem({ label: 'Privacy Report...', action: () => addWindow(WifiApp) }),
   menuItem({ label: 'Settings for This Website...' }),
   menuSeparator,
   menuItem({ label: 'Clear History...' }),

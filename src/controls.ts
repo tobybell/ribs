@@ -1,9 +1,9 @@
 import { noop } from "./function-stuff";
 import { either, Handler, map, State, state, Stream } from "./stream-stuff";
 import { div, text } from "./div";
-import { domEvent, enable } from "./component";
+import { Component, domEvent, enable } from "./component";
 import { clickControl } from "./click-control";
-import { checkmark, nsChevronIcon } from "./icons";
+import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } from "./icons";
 import { oneHot } from "./one-hot";
 import { menu, menuItem } from "./menu";
 import { openMenu } from "./context-menu";
@@ -14,7 +14,6 @@ export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) =>
     width: '16px',
     height: '16px',
     borderRadius: '8px',
-    margin: '16px',
     backgroundImage: map(active, x => x ? 'linear-gradient(#3367df, #255cc6)' : 'linear-gradient(#505152, #6b6c6c)'),
     boxShadow: '0 .5px 1px -.5px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 .5px 1px rgba(0, 0, 0, .4)',
     overflow: 'hidden',
@@ -130,6 +129,29 @@ const gloss = div({
   pointerEvents: 'none',
 });
 
+export function button(label: Stream<string>, action: Handler<MouseEvent>) {
+  const [active, setActive] = state(false);
+  return div({
+    height: '19px',
+    backgroundColor: either(active, '#336dd9', '#666768'),
+    borderRadius: '3px',
+    boxShadow: '0 0 1px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .15)',
+    padding: '0 16px',
+    width: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#ffffff',
+    overflow: 'hidden',
+    cursor: 'default',
+  }, [
+    text(label),
+    gloss,
+  ], [
+    clickControl(action, setActive),
+  ]);
+}
+
 /** Get the "current" value from a stream. */
 function sample<T>(f: Stream<T>, init: T): T;
 function sample<T>(f: Stream<T>, init?: T): T | undefined {
@@ -185,3 +207,36 @@ export const select = () => {
     },
   ]);
 };
+
+function halfButton(content: Component, action: Handler<MouseEvent>) {
+  const [active, setActive] = state(false);
+  return div({
+    height: '50%',
+    width: '100%',
+    backgroundColor: either(active, '#336dd9', '#656565'),
+    cursor: 'default',
+  }, [content], [
+    clickControl(action, setActive),
+  ]);
+}
+
+export function upDownButton(onUp: Handler<MouseEvent>, onDown: Handler<MouseEvent>) {
+  return div({
+    width: "11px",
+    height: "18px",
+  }, [
+    div({
+      width: "100%",
+      height: "calc(100% + 2px)",
+      transform: "translate(0, -1px)",
+      borderRadius: '5px',
+      boxShadow: '0 0 1px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .15)',
+      overflow: 'hidden',
+      cursor: 'default',
+    }, [
+      halfButton(smallChevronUpIcon(), onUp),
+      halfButton(smallChevronDownIcon(), onDown),
+      gloss,
+    ]),
+  ]);
+}

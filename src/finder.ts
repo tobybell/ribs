@@ -9,6 +9,7 @@ import { menu, menuItem, menuSeparator } from "./menu";
 import { toolbarBar } from "./toolbar-bar";
 import { Component, mount, streamComp } from "./component";
 import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "./icons";
+import { formSection, formSeparator } from "./form";
 
 function space(size: number) {
   const div = document.createElement('div');
@@ -134,12 +135,13 @@ export const Finder = win(c => {
       alignItems: 'stretch',
     }, [
       sidebar(expanded, setExpanded),
-      div({ flex: '1 0 auto' }, [
-        radio(a(0), () => setWhich(0)),
-        radio(a(1), () => setWhich(1)),
-        radio(a(2), () => setWhich(2)),
-        checkbox(...state(false)),
-        checkbox(...state(true)),
+      div({ flex: '1 0 0' }, [
+        formSection(radio(a(0), () => setWhich(0))),
+        formSection(radio(a(1), () => setWhich(1))),
+        formSection(radio(a(2), () => setWhich(2))),
+        formSeparator(),
+        formSection(checkbox(...state(false))),
+        formSection(checkbox(...state(true))),
         select(),
         slider(...state(.5)),
       ]),

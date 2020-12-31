@@ -35,7 +35,7 @@ export function windowPane(content?: ElementThing[], effects?: Effect[]) {
     boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7)',
     display: 'flex',
     flexFlow: 'column nowrap',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     width: '100%',
     height: '100%',
   }, [...(content || []), borderOverlay], effects);

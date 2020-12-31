@@ -15,6 +15,10 @@ export function oneHot<T>(s: Stream<T | undefined>): (x: T) => Stream<boolean> {
     }
   };
   const enable = posaphore(() => s(setter));
+
+  // TODO: Under certain usage patterns this could fill up with old unused
+  // streams. We could schedule an infrequent cleanup operation to get rid of
+  // them or something.
   const streams = new Map<T, [Stream<boolean>, Handler<boolean>]>();
 
   const getter = (k: T): Stream<boolean> => {
@@ -22,8 +26,9 @@ export function oneHot<T>(s: Stream<T | undefined>): (x: T) => Stream<boolean> {
     if (existing) return existing[0];
     const [oh, soh] = stream<boolean>();
     const foh: Stream<boolean> = h => {
+      const d = enable();
       h(curr === k);
-      return cleanup(enable(), oh(h));
+      return cleanup(oh(h), d);
     };
     streams.set(k, [foh, soh]);
     return foh;
