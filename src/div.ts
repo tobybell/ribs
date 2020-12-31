@@ -64,7 +64,7 @@ function elemComponent<K extends keyof HTMLElementTagNameMap>(e: K) {
 
 export const div = elemComponent("div");
 
-export const span = elemComponent("span");
+export const span = elemRawComponent("span");
 
 export const rawInput = elemRawComponent("input");
 

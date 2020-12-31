@@ -86,6 +86,17 @@ export const join = <T extends {}>(streams: {[K in keyof T]: Stream<T[K]>}): Str
   };
 };
 
+export const cat = <T>(streams: Stream<Stream<T>>): Stream<T> => h => {
+  let last: Cleanup | undefined;
+  return cleanup(
+    streams(s => {
+      last?.();
+      last = s(h);
+    }),
+    () => last?.(),
+  );
+}
+
 export function stream<T = void>(): [Stream<T>, Handler<T>] {
   let handlers = new Set<Handler<T>>();
   const stream: Stream<T> = (h: Handler<T>) => {

@@ -1,36 +1,21 @@
 import { Data, DataStore } from './data-stuff';
 
-import { Thunk } from './function-stuff';
-import { Stream, stream, state, just, square, map, join, merge } from './stream-stuff';
-import { Cleanup, Temporary, cleanup } from "./temporary-stuff";
+import { Stream, state, just, map, join } from './stream-stuff';
+import { Cleanup, cleanup } from "./temporary-stuff";
 import { posaphore } from "./posaphore";
-import { oneHot } from "./one-hot";
 import { elem } from "./elem";
-import { render, mount, domEvent, append, Component, Effect } from "./component";
+import { render, mount, domEvent, Component, Effect } from "./component";
 import { div } from "./div";
 
 import { ticks, scaleLinear } from 'd3';
-import { WindowControls, windowEnvironment, WindowHandles, windowPane } from './window-stuff';
-import { wait } from './async-stuff';
+import { WindowControls, windowEnvironment, windowPane } from './window-stuff';
 import { simpleTitleBar } from './toolbar-bar';
-import { borderOverlay } from './appearance-stuff';
 import { Finder } from './finder';
-import { menu, Menu, menuItem, menuSeparator } from './menu';
-import { contextMenu } from './context-menu';
-import { appleMenuIcon } from './icons';
+import { menu, menuItem, menuSeparator } from './menu';
 import { desktop } from './desktop';
 import { emitterApp } from './emitter-app';
 
 type Handler<T> = (x: T) => void;
-
-/** Create a pull stream that counts up from 0. */
-const counter = () => {
-  let x = -1;
-  return () => {
-    x += 1;
-    return x;
-  };
-}
 
 const SimpleWindow = (title: string, content: Component): Window => (c: WindowControls) => {
   const pane = windowPane([

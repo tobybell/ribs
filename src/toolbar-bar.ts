@@ -1,7 +1,7 @@
 import { clickControl, hoverEffect } from "./click-control";
 import { Component, domEvent, enable } from "./component";
 import { contextMenu } from "./context-menu";
-import { div, span } from "./div";
+import { children, div, span, style } from "./div";
 import { columnsIcon, galleryIcon, iconsIcon, listIcon, searchIcon, windowCloseIcon, windowMaximizeIcon, windowMinimizeIcon } from "./icons";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { any, Handler, map, state, Stream } from "./stream-stuff";
@@ -52,7 +52,7 @@ const windowButton = (
   }, [
     content,
   ], [
-    clickControl(setHighlight, onClick, onClicking),
+    clickControl(onClick, setHighlight, onClicking),
   ])(r);
 };
 
@@ -124,13 +124,14 @@ function toolbarSearch() {
     padding: '0 5px',
   }, [
     searchIcon(),
-    span({
-      color: 'rgba(255, 255, 255, 0.3)',
-      marginLeft: '3px',
-      flex: '1 0 auto',
-    }, [
-      'Search',
-    ]),
+    span(
+      style({
+        color: 'rgba(255, 255, 255, 0.3)',
+        marginLeft: '3px',
+        flex: '1 0 auto',
+      }),
+      children('Search'),
+    ),
   ]);
 }
 

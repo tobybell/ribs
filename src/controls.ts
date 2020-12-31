@@ -29,7 +29,7 @@ export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) =>
     }),
     enable(highlight, div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
   ], [
-    clickControl(setHighlight, onClick),
+    clickControl(onClick, setHighlight),
   ]);
 };
 
@@ -53,7 +53,7 @@ export function checkbox(checked: Stream<boolean>, onChange?: Handler<boolean>) 
     enable(active, div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
   ], [
     () => checked(x => isChecked = x),
-    clickControl(setActive, onChange && (() => onChange(!isChecked))),
+    clickControl(onChange && (() => onChange(!isChecked)), setActive),
   ]);
 }
 

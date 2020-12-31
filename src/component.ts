@@ -17,6 +17,13 @@ export function render(c: Component, p: Node): Cleanup {
   return cleanup(c(m), () => m.remove());
 }
 
+/** Render a component into a container at an index. */
+export function renderAt(c: Component, p: Node, i: number): Cleanup {
+  const m = marker();
+  p.insertBefore(m, p.childNodes[i]);
+  return cleanup(c(m), () => m.remove());
+}
+
 export function mount(n: Node, r: Node): Cleanup {
   const p = r.parentNode!;
   p.replaceChild(n, r);

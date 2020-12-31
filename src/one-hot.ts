@@ -1,33 +1,36 @@
-import { Stream, Handler, stream } from "./stream-stuff";
+import { Stream, Handler, stream, map, cat } from "./stream-stuff";
 import { cleanup } from "./temporary-stuff";
 import { posaphore } from "./posaphore";
 
-type OneHotStreams = (x: number) => Stream<boolean>;
-
-export function oneHot(s: Stream<number | undefined>): OneHotStreams {
-  let curr: number | undefined;
-  const setter = (x: number | undefined) => {
+export function oneHot<T>(s: Stream<T | undefined>): (x: T) => Stream<boolean> {
+  let curr: T | undefined;
+  const setter = (x: T | undefined) => {
     if (x === curr) return;
-    if (curr !== undefined && streams[curr]) {
-      streams[curr][1](false);
+    if (curr !== undefined) {
+      streams.get(curr)?.[1](false);
     }
     curr = x;
-    if (x !== undefined && streams[x]) {
-      streams[x][1](true);
+    if (x !== undefined) {
+      streams.get(x)?.[1](true);
     }
   };
-  const incr = posaphore(() => s(setter));
-  const streams: {[k: number]: [Stream<boolean>, Handler<boolean>]} = {};
-  const getter = (k: number): Stream<boolean> => {
-    if (streams[k]) return streams[k][0];
+  const enable = posaphore(() => s(setter));
+  const streams = new Map<T, [Stream<boolean>, Handler<boolean>]>();
+
+  const getter = (k: T): Stream<boolean> => {
+    const existing = streams.get(k);
+    if (existing) return existing[0];
     const [oh, soh] = stream<boolean>();
     const foh: Stream<boolean> = h => {
-      const decr = incr();
       h(curr === k);
-      return cleanup(oh(h), decr);
+      return cleanup(enable(), oh(h));
     };
-    streams[k] = [foh, soh];
+    streams.set(k, [foh, soh]);
     return foh;
   };
   return getter;
+}
+
+export function streamOneHot<T>(s: Stream<T | undefined>): (x: Stream<T>) => Stream<boolean> {
+  return n => cat(map(n, oneHot(s)));
 }

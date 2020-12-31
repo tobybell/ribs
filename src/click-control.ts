@@ -1,6 +1,7 @@
 import { domEvent, Effect } from "./component";
 import { noop } from "./function-stuff";
-import { Handler } from "./stream-stuff";
+import { Handler, Stream } from "./stream-stuff";
+import { cleanup, Cleanup } from "./temporary-stuff";
 
 export function hoverEffect(h: Handler<boolean>): Effect {
   return n => {
@@ -15,9 +16,20 @@ export function hoverEffect(h: Handler<boolean>): Effect {
   };
 }
 
+export const mutClick = (onClick: Stream<Handler<MouseEvent> | undefined>): Effect => n => {
+  let last: Cleanup | undefined;
+  return cleanup(
+    onClick(h => {
+      last?.();
+      last = h && clickControl(h)(n);
+    }),
+    () => last?.(),
+  );
+};
+
 export function clickControl(
-  onHighlight: Handler<boolean> = noop,
   onClick: Handler<MouseEvent> = noop,
+  onHighlight: Handler<boolean> = noop,
   onClicking: Handler<boolean> = noop,
 ) {
   return domEvent('mousedown', e => {

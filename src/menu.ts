@@ -1,6 +1,6 @@
 import { hoverEffect } from "./click-control";
 import { Component, domEvent } from "./component";
-import { div, span } from "./div";
+import { children, div, span } from "./div";
 import { noop, Thunk } from "./function-stuff";
 import { menuCheckIcon } from "./icons";
 import { either, Handler, just, state, Stream } from "./stream-stuff";
@@ -90,7 +90,7 @@ export const menuItem = ({ label, action = noop, checked = just(false) }: {
     cursor: 'default',
   }, [
     menuCheck(fontSize, checked),
-    span({}, [label]),
+    span(children(label)),
   ], [
     hoverEffect(setHighlight),
     domEvent('click', e => {
