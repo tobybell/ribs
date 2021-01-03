@@ -1,4 +1,3 @@
-import { add } from "lodash";
 import { ArrayStream } from "./array-stuff";
 import { binsert } from "./bsearch";
 import { Handler } from "./stream-stuff";

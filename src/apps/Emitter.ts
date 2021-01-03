@@ -1,16 +1,16 @@
+import { plusMinusButton } from "../add-remove-button";
+import { array, contains } from "../array-stuff";
+import { button } from "../controls";
+import { ValuePair } from "../data-stuff";
+import { formSection, formSeparator, labeledSection, submitSection } from "../form";
+import { space } from "../layout";
+import { ProtocolWriter } from "../protocol-writer";
+import { state, Sync } from "../state";
 import { Handler, just, map, stream, Stream } from "../stream-stuff";
+import { editableTextCell, Field, field, table } from "../table";
+import { textField, upDownField } from "../text-field";
 import { simpleTitleBar } from "../toolbar-bar";
 import { win, windowPane } from "../window-stuff";
-import { space } from "../layout";
-import { ProtocolWriter, protocolWriter } from "../protocol-writer";
-import { button } from "../controls";
-import { formSection, formSeparator, labeledSection, submitSection } from "../form";
-import { textField, upDownField } from "../text-field";
-import { array, contains } from "../array-stuff";
-import { editableTextCell, Field, field, table } from "../table";
-import { plusMinusButton } from "../add-remove-button";
-import { ValuePair } from "../data-stuff";
-import { state, Sync } from "../state";
 
 type Streams<T> = { [K in keyof T]: Stream<T[K]> };
 type Setters<T> = { [K in keyof T]: Handler<T[K]> };

@@ -1,27 +1,22 @@
-import { Data, DataStore, Quantity, Time, Value } from './data-stuff';
-
-import { Stream, state, just, map, join, stream } from './stream-stuff';
-import { Cleanup, cleanup } from "./temporary-stuff";
-import { posaphore } from "./posaphore";
-import { elem } from "./elem";
-import { render, mount, domEvent, Component, Effect } from "./component";
+import { Emitter } from "./apps/Emitter";
+import { Finder } from "./apps/Finder";
+import { PreferredNetworks } from "./apps/PreferredNetworks";
+import { Quantities } from "./apps/Quantities";
+import { binsert } from "./bsearch";
+import { Component, domEvent, Effect, mount, render } from "./component";
+import { connect } from "./connection";
+import { Data, DataStore } from "./data-stuff";
+import { desktop } from "./desktop";
 import { div } from "./div";
+import { elem } from "./elem";
+import { menu, menuItem, menuSeparator } from "./menu";
+import { posaphore } from "./posaphore";
+import { join, just, map, state, Stream } from "./stream-stuff";
+import { Cleanup, cleanup } from "./temporary-stuff";
+import { simpleTitleBar } from "./toolbar-bar";
+import { WindowControls, windowEnvironment, windowPane } from "./window-stuff";
 
-import { ticks, scaleLinear } from 'd3';
-import { WindowControls, windowEnvironment, windowPane } from './window-stuff';
-import { simpleTitleBar } from './toolbar-bar';
-import { Finder } from './apps/Finder';
-import { menu, menuItem, menuSeparator } from './menu';
-import { desktop } from './desktop';
-import { Emitter } from './apps/Emitter';
-import { PreferredNetworks } from './apps/PreferredNetworks';
-import { Quantities } from './apps/Quantities';
-import { protocolWriter } from './protocol-writer';
-import { protocolReader } from './protocol-reader';
-import { SetStream } from './set-stuff';
-import { noop } from './function-stuff';
-import { connect } from './connection';
-import { binsert } from './bsearch';
+import { scaleLinear, ticks } from "d3";
 
 type Handler<T> = (x: T) => void;
 

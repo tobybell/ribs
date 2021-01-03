@@ -1,7 +1,7 @@
-import { Component, render, mount } from "./component";
-import { Stream } from "./stream-stuff";
+import { Component, mount, render } from "./component";
 import { elem } from "./elem";
-import { cleanup, Temporary, Cleanup } from "./temporary-stuff";
+import { Stream } from "./stream-stuff";
+import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
 
 export type ElementThing = HTMLElement | SVGSVGElement | Component | string | undefined;
 type StreamableCSS = {[K in keyof CSSStyleDeclaration]?: string | Stream<string>};

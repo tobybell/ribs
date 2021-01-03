@@ -1,5 +1,3 @@
-/** File for actual data stuff. */
-
 import { Handler } from "./stream-stuff";
 
 export type Quantity = number;

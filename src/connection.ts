@@ -1,11 +1,11 @@
-import { Quantity, Value, ValuePair } from "./data-stuff";
+import { Quantity, ValuePair } from "./data-stuff";
 import { posaphore } from "./posaphore";
 import { protocolReader } from "./protocol-reader";
 import { ProtocolWriter, protocolWriter } from "./protocol-writer";
 import { mutableSet, SetHandler, SetStream } from "./set-stuff";
-import { State, state, Sync } from "./state";
-import { all, enable, Handler, Stream } from "./stream-stuff";
-import { cleanup, Cleanup, cleanupFrom, Temporary } from "./temporary-stuff";
+import { state, Sync } from "./state";
+import { enable, Handler } from "./stream-stuff";
+import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
 
 
 function enabler(h: Handler<boolean>): Temporary<void> {

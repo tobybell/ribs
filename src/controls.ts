@@ -1,12 +1,12 @@
-import { either, Handler, map, enable, state, Stream } from "./stream-stuff";
-import { div, text } from "./div";
-import { Component, domEvent } from "./component";
 import { clickControl } from "./click-control";
-import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } from "./icons";
-import { oneHot } from "./one-hot";
-import { menu, menuItem } from "./menu";
+import { Component, domEvent } from "./component";
 import { openMenu } from "./context-menu";
+import { div, text } from "./div";
+import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } from "./icons";
+import { menu, menuItem } from "./menu";
+import { oneHot } from "./one-hot";
 import { Sync } from "./state";
+import { either, enable, Handler, map, state, Stream } from "./stream-stuff";
 
 export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) => {
   const [highlight, setHighlight] = state(false);

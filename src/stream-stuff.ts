@@ -1,5 +1,5 @@
-import { noop, Thunk } from './function-stuff';
-import { Cleanup, cleanup, empty, Temporary } from './temporary-stuff';
+import { noop, Thunk } from "./function-stuff";
+import { Cleanup, cleanup, empty, Temporary } from "./temporary-stuff";
 
 export type Unsubscriber = () => void;
 export type Handler<T> = (x: T) => void;

@@ -1,18 +1,18 @@
-import { arrayMap, ArrayState, ArrayStream, length, move, MutableArray } from "./array-stuff";
-import { Component, domEvent, inputType, inputValue, render } from "./component";
-import { children, div, rawInput, span, style, text } from "./div";
-import { arrayChildren } from "./array-children";
-import { Stream, Handler, map, either, unique, just, streamComp } from "./stream-stuff";
-import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
 import { aniJoin, animatable, Animatable, AnimatableStream } from "./animatable";
-import { noop, Thunk } from "./function-stuff";
-import { useDrag } from "./window-stuff";
+import { arrayChildren } from "./array-children";
+import { arrayMap, ArrayState, ArrayStream, length, move, MutableArray } from "./array-stuff";
 import { mutClick } from "./click-control";
-import { checkbox } from "./controls";
-import { focusHighlight } from "./focus-stuff";
-import { MutableState, State, state, Sync } from "./state";
 import { columnLayout } from "./column-layout";
+import { Component, domEvent, inputType, inputValue, render } from "./component";
+import { checkbox } from "./controls";
+import { children, div, rawInput, span, style, text } from "./div";
+import { focusHighlight } from "./focus-stuff";
+import { noop, Thunk } from "./function-stuff";
 import { oneHot } from "./one-hot";
+import { MutableState, state, Sync } from "./state";
+import { either, Handler, just, map, Stream, streamComp, unique } from "./stream-stuff";
+import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
+import { useDrag } from "./window-stuff";
 
 function mapGrid<T, S>(src1: ArrayState<T>, src2: ArrayState<S>, fn: (a: T, b: S) => Cleanup): Cleanup {
   const active: Cleanup[][] = [];

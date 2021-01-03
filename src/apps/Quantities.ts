@@ -1,18 +1,14 @@
 import { plusMinusButton } from "../add-remove-button";
 import { array, arrayMap, contains } from "../array-stuff";
-import { counter } from "../counter";
+import { Quantity } from "../data-stuff";
 import { formSection } from "../form";
 import { space } from "../layout";
-import { Stream, Handler } from "../stream-stuff";
+import { ProtocolWriter } from "../protocol-writer";
+import { set2arr, SetStream } from "../set-stuff";
 import { state, Sync } from "../state";
 import { editableTextCell, field, Field, table, textCell } from "../table";
 import { simpleTitleBar } from "../toolbar-bar";
 import { win, windowPane } from "../window-stuff";
-import { ProtocolWriter } from "../protocol-writer";
-import { Quantity } from "../data-stuff";
-import { set2arr, SetStream } from "../set-stuff";
-import { noop } from "../function-stuff";
-import { empty } from "../temporary-stuff";
 
 interface MutableQuantity {
   id: Quantity;

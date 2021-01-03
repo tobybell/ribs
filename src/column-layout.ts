@@ -1,7 +1,4 @@
-/** File for actual data stuff. */
-
 import { animatable, Animatable, AnimatableStream } from "./animatable";
-import { just } from "./stream-stuff";
 
 type Width = number;
 type Offset = number;

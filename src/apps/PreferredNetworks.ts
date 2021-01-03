@@ -4,7 +4,7 @@ import { counter } from "../counter";
 import { formSection } from "../form";
 import { space } from "../layout";
 import { state } from "../state";
-import { Stream, Handler } from "../stream-stuff";
+import { Handler, Stream } from "../stream-stuff";
 import { checkboxCell, editableTextCell, field, Field, table, textCell } from "../table";
 import { simpleTitleBar } from "../toolbar-bar";
 import { win, windowPane } from "../window-stuff";

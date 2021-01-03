@@ -1,16 +1,15 @@
-import { win } from "../window-stuff";
-import { Handler, just, map, Stream, streamComp } from "../stream-stuff";
-import { oneHot } from "../one-hot";
-import { checkbox, radio, select, slider } from "../controls";
-import { windowPane } from "../window-stuff";
-import { div } from "../div";
-import { contextMenu } from "../context-menu";
-import { menu, menuItem, menuSeparator } from "../menu";
-import { toolbarBar } from "../toolbar-bar";
 import { Component, mount } from "../component";
-import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "../icons";
+import { contextMenu } from "../context-menu";
+import { checkbox, radio, select, slider } from "../controls";
+import { div } from "../div";
 import { formSection, formSeparator } from "../form";
+import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "../icons";
+import { menu, menuItem, menuSeparator } from "../menu";
+import { oneHot } from "../one-hot";
 import { state, Sync } from "../state";
+import { Handler, just, map, Stream, streamComp } from "../stream-stuff";
+import { toolbarBar } from "../toolbar-bar";
+import { win, windowPane } from "../window-stuff";
 
 function space(size: number) {
   const div = document.createElement('div');

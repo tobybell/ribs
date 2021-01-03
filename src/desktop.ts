@@ -1,5 +1,4 @@
-import { wait } from "./async-stuff";
-import { append, Component, domEvent, mount, render } from "./component";
+import { Component, domEvent, mount, render } from "./component";
 import { contextMenu, openMenuIn } from "./context-menu";
 import { div } from "./div";
 import { elem } from "./elem";
@@ -9,7 +8,7 @@ import { appleMenuIcon } from "./icons";
 import { Menu, menu, menuItem, menuSeparator } from "./menu";
 import { oneHot } from "./one-hot";
 import { Handler, map, state, Stream, trigger } from "./stream-stuff";
-import { Cleanup, cleanup } from "./temporary-stuff";
+import { cleanup } from "./temporary-stuff";
 import { WindowHandles, WindowStream } from "./window-stuff";
 
 function dragger(top: string, bottom: string, left: string, right: string, width: string, height: string, cursor: string, onMouseDown: Handler<MouseEvent>) {

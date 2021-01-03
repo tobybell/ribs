@@ -1,6 +1,6 @@
 import { Effect, render } from "./component";
 import { div } from "./div";
-import { Stream, either } from "./stream-stuff";
+import { either, Stream } from "./stream-stuff";
 
 // TODO: Add global responder system like macOS.
 

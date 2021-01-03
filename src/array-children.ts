@@ -1,6 +1,6 @@
 import { ArrayStream } from "./array-stuff";
 import { Component, render, renderAt } from "./component";
-import { Temporary, Cleanup, cleanup, cleanupFrom } from "./temporary-stuff";
+import { Cleanup, cleanup, cleanupFrom, Temporary } from "./temporary-stuff";
 
 export function arrayChildren(c: ArrayStream<Component>): Temporary<Node> {
   return n => {

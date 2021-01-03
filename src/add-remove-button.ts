@@ -4,7 +4,7 @@ import { div } from "./div";
 import { Thunk } from "./function-stuff";
 import { addIcon, removeIcon } from "./icons";
 import { rowF } from "./layout";
-import { Stream, state, either, Handler, just } from "./stream-stuff";
+import { either, Handler, just, state, Stream } from "./stream-stuff";
 
 function halfButton(content: Component, click: Handler<MouseEvent>, enable: Stream<boolean>) {
   const [highlighted, highlight] = state(false);

@@ -1,7 +1,7 @@
 import { noop } from "./function-stuff";
 import { posaphore } from "./posaphore";
 import { state, State } from "./state";
-import { Stream, state as oldState } from "./stream-stuff";
+import { state as oldState, Stream } from "./stream-stuff";
 import { cleanup, Cleanup } from "./temporary-stuff";
 
 export interface ArrayHandler<T> {

@@ -1,11 +1,11 @@
-import { Component, inputType, inputValue, domEvent } from "./component";
+import { Component, domEvent, inputType, inputValue } from "./component";
 import { upDownButton } from "./controls";
 import { div, rawInput, style } from "./div";
 import { focusHighlight } from "./focus-stuff";
 import { Thunk } from "./function-stuff";
 import { row, space } from "./layout";
 import { Sync } from "./state";
-import { Stream, state, Handler } from "./stream-stuff";
+import { state } from "./stream-stuff";
 
 export function textField(value: Sync<string>, size = 13): Component {
   const [highlight, setHighlight] = state(false);
