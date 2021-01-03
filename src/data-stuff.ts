@@ -6,7 +6,10 @@ export type Quantity = number;
 export type Time = number;
 export type Value = number;
 
-export type ValuePair = [Time, Value];
+export interface ValuePair {
+  time: Time;
+  value: Value;
+}
 
 export interface Data {
   t: Time[];

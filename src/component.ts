@@ -1,6 +1,6 @@
 import { noop } from "./function-stuff";
-import { Handler, map, Stream } from "./stream-stuff";
-import { cleanup, Cleanup, empty, Temporary } from "./temporary-stuff";
+import { Handler, Stream } from "./stream-stuff";
+import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
 
 export type Component = Temporary<Node>;
 export type Effect = Temporary<Element>;
@@ -33,21 +33,6 @@ export function mount(n: Node, r: Node): Cleanup {
 export function append(c: Node, p: Node): Cleanup {
   p.appendChild(c);
   return () => void p.removeChild(c);
-}
-
-export function streamComp(s: Stream<Component>): Component {
-  return r => {
-    let old = noop;
-    const unsub = s(x => {
-      old();
-      old = x(r);
-    });
-    return () => (unsub(), old());
-  };
-}
-
-export function enable(s: Stream<boolean>, c: Component) {
-  return streamComp(map(s, x => x ? c : empty));
 }
 
 export function domEvent<Type extends keyof HTMLElementEventMap>(

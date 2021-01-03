@@ -1,10 +1,11 @@
 import { clickControl, hoverEffect } from "./click-control";
-import { Component, domEvent, enable } from "./component";
+import { Component, domEvent } from "./component";
 import { contextMenu } from "./context-menu";
 import { children, div, span, style } from "./div";
 import { columnsIcon, galleryIcon, iconsIcon, listIcon, searchIcon, windowCloseIcon, windowMaximizeIcon, windowMinimizeIcon } from "./icons";
 import { menu, menuItem, menuSeparator } from "./menu";
-import { any, Handler, map, state, Stream } from "./stream-stuff";
+import { Icon } from "./paths-icon";
+import { any, enable, Handler, map, state, Stream } from "./stream-stuff";
 
 const windowButtons = (close: Handler<never>): Component => r => {
   const [hover, setHover] = state(false);
@@ -36,7 +37,7 @@ const windowButtons = (close: Handler<never>): Component => r => {
 const windowButton = (
     defaultColor: string,
     highlightColor: string,
-    icon: any,
+    icon: Icon,
     showDetail: Stream<boolean>,
     onClicking: Handler<boolean>,
     onClick: Handler<MouseEvent>): Component => r => {

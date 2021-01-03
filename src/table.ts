@@ -1,8 +1,8 @@
 import { arrayMap, ArrayState, ArrayStream, length, move, MutableArray } from "./array-stuff";
-import { Component, domEvent, inputType, inputValue, render, streamComp } from "./component";
+import { Component, domEvent, inputType, inputValue, render } from "./component";
 import { children, div, rawInput, span, style, text } from "./div";
 import { arrayChildren } from "./array-children";
-import { Stream, Handler, map, either, State, state, unique, just } from "./stream-stuff";
+import { Stream, Handler, map, either, unique, just, streamComp } from "./stream-stuff";
 import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
 import { aniJoin, animatable, Animatable, AnimatableStream } from "./animatable";
 import { noop, Thunk } from "./function-stuff";
@@ -10,7 +10,7 @@ import { useDrag } from "./window-stuff";
 import { mutClick } from "./click-control";
 import { checkbox } from "./controls";
 import { focusHighlight } from "./focus-stuff";
-import { State as State2, state as state2 } from "./state";
+import { MutableState, State, state, Sync } from "./state";
 import { columnLayout } from "./column-layout";
 import { oneHot } from "./one-hot";
 
@@ -190,13 +190,14 @@ const basicCell = (...fx: Temporary<HTMLDivElement>[]): Cell => c => div({
 
 export const textCell = (label: string) => basicCell(children(label));
 
-export const checkboxCell = (checked: Stream<boolean>, check: Handler<boolean>) => basicCell(
-  children(checkbox(checked, check))
+export const checkboxCell = (checked: Sync<boolean>) => basicCell(
+  children(checkbox(checked))
 );
 
-export const editableTextCell = (label: Stream<string>, change: Handler<string>): Cell => {
-  const [rawFocus, setFocus] = state(false);
+export const editableTextCell = (value: Sync<string>): Cell => {
+  const { get: rawFocus, set: setFocus } = state(false);
   const focus = unique(rawFocus);
+  let pre: string;
   const input = rawInput(
     style({
       position: "absolute",
@@ -213,9 +214,21 @@ export const editableTextCell = (label: Stream<string>, change: Handler<string>)
       background: "#202020",
     }),
     inputType("text"),
-    inputValue(label),
-    domEvent("blur", () => setFocus(false)),
+    inputValue(value.get),
+    // TODO: Move this somewhere else so other text inputs can use it?
+    n => domEvent("keypress", e => {
+      if (e.key === "Enter") {
+        e.stopPropagation();
+        e.preventDefault();
+        n.blur();
+      }
+    })(n),
+    n => domEvent("blur", () => {
+      n.value !== pre && value.set(n.value);
+      setFocus(false);
+    })(n),
     n => (setTimeout(() => {
+      pre = n.value;
       n.focus();
       n.select();
     }), noop),
@@ -223,7 +236,7 @@ export const editableTextCell = (label: Stream<string>, change: Handler<string>)
   return c => {
     const nonInput = span(
       style({ color: "#ffffff", fontSize: "13px" }),
-      children(text(label)),
+      children(text(value.get)),
       mutClick(either(c.selected, () => setFocus(true), undefined)),
     );
     return basicCell(
@@ -237,7 +250,7 @@ const rowHeight = 18;
 const rowStride = 19;
 
 class TableRow<T> {
-  index: State2<number>;
+  index: MutableState<number>;
   value: T;
   y: AnimatableStream<number>;
   height: AnimatableStream<number> = just([rowHeight, false]);
@@ -245,7 +258,7 @@ class TableRow<T> {
   selected: Stream<boolean>;
   select: Thunk;
 
-  constructor(index: State2<number>, value: T, y: Animatable<number>, selected: Stream<boolean>, select: Handler<T>) {
+  constructor(index: MutableState<number>, value: T, y: Animatable<number>, selected: Stream<boolean>, select: Handler<T>) {
     this.index = index;
     this.value = value;
     this.rawY = y;
@@ -259,7 +272,7 @@ function tableRows<T>(source: ArrayStream<T>, selected: Stream<T>, select: Handl
   const rows = new MutableArray<TableRow<T>>();
   const isSelected = oneHot(selected);
   const makeRow = (item: T, i: number) => {
-    const index = state2(i);
+    const index = state(i);
     return new TableRow(
       index,
       item,
@@ -267,7 +280,7 @@ function tableRows<T>(source: ArrayStream<T>, selected: Stream<T>, select: Handl
       isSelected(item),
       select);
   }
-  source({
+  const cleanupRows = source({
     init(d) {
       rows.init(d.map(makeRow));
     },
@@ -296,7 +309,7 @@ function tableRows<T>(source: ArrayStream<T>, selected: Stream<T>, select: Handl
       rows.move(from, to);
     },
   });
-  return rows;
+  return { rows, cleanupRows };
 }
 
 type CellMaker<T> = (x: T) => Cell;
@@ -332,7 +345,7 @@ function tableColumns<T>(fields: ArrayStream<Field<T>>) {
       shiftWidth: d => layout.shiftWidth(i, d),
     };
   };
-  fields({
+  const cleanupColumns = fields({
     init(d) {
       layout.init(d.map(_ => 150));
       cols.init(d.map(makeCol));
@@ -352,12 +365,12 @@ function tableColumns<T>(fields: ArrayStream<Field<T>>) {
 
   const full = layout.full.sub.bind(layout.full);
 
-  return { cols, full };
+  return { cols, full, cleanupColumns };
 }
 
-export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, selected: Stream<T>, select: Handler<T>) {
-  const rows = tableRows(data, selected, select);
-  const { cols, full } = tableColumns(fields);
+export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, selected: Sync<T>) {
+  const { rows, cleanupRows } = tableRows(data, selected.get, selected.set);
+  const { cols, full, cleanupColumns } = tableColumns(fields);
 
   const fullPixels = map(full, x => `${x[0]}px`);
 
@@ -371,7 +384,7 @@ export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, se
     tableHeader(fullPixels, cols.stream),
     div({
       overflowY: "scroll",
-      height: "100px",
+      height: "110px",
       minWidth: fullPixels,
     }, [
       div({
@@ -386,6 +399,9 @@ export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, se
           select: r.select,
         }), n)),
       ]),
+    ], [
+      () => cleanupRows,
+      () => cleanupColumns,
     ]),
   ]);
 }

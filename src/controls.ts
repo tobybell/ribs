@@ -1,12 +1,12 @@
-import { noop } from "./function-stuff";
-import { either, Handler, map, State, state, Stream } from "./stream-stuff";
+import { either, Handler, map, enable, state, Stream } from "./stream-stuff";
 import { div, text } from "./div";
-import { Component, domEvent, enable } from "./component";
+import { Component, domEvent } from "./component";
 import { clickControl } from "./click-control";
 import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } from "./icons";
 import { oneHot } from "./one-hot";
 import { menu, menuItem } from "./menu";
 import { openMenu } from "./context-menu";
+import { Sync } from "./state";
 
 export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) => {
   const [highlight, setHighlight] = state(false);
@@ -32,31 +32,26 @@ export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) =>
   ]);
 };
 
-// TODO:
-//   State: on, mixed, off
-//   Disabled: yes, no
-//   Blurred: yes, no
-//   Highlighted: yes, no
-export function checkbox(checked: Stream<boolean>, onChange?: Handler<boolean>) {
+export function checkbox(checked: Sync<boolean>) {
   let isChecked = false;
   const [active, setActive] = state(false);
   return div({
     width: '14px',
     height: '14px',
     borderRadius: '3px',
-    backgroundImage: either(checked, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
+    backgroundImage: either(checked.get, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
     boxShadow: '0 1px 1px -1px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
     overflow: 'hidden',
   }, [
-    enable(checked, checkmark()),
+    enable(checked.get, checkmark()),
     enable(active, div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
   ], [
-    () => checked(x => isChecked = x),
-    clickControl(onChange && (() => onChange(!isChecked)), setActive),
+    () => checked.get(x => isChecked = x),
+    clickControl(() => checked.set(!isChecked), setActive),
   ]);
 }
 
-export function slider(value: Stream<number>, onChange: Handler<number> = noop) {
+export function slider(value: Sync<number>) {
   return div({
     height: '15px',
     margin: '16px',
@@ -72,7 +67,7 @@ export function slider(value: Stream<number>, onChange: Handler<number> = noop) 
         backgroundColor: '#3268de',
         height: '100%',
         width: '100%',
-        transform: map(value, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
+        transform: map(value.get, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
       }),
     ]),
     div({
@@ -81,7 +76,7 @@ export function slider(value: Stream<number>, onChange: Handler<number> = noop) 
       position: 'absolute',
       top: '0',
       left: '0',
-      transform: map(value, v => `translateX(calc(${v} * (100% - 15px)))`),
+      transform: map(value.get, v => `translateX(calc(${v} * (100% - 15px)))`),
     }, [
       div({
         backgroundColor: '#ccc',
@@ -101,8 +96,8 @@ export function slider(value: Stream<number>, onChange: Handler<number> = noop) 
 
       const update = (e: MouseEvent) => {
         const lerp = (e.clientX - left) / width;
-        const value = Math.min(Math.max(lerp, 0), 1);
-        onChange(value);
+        const newVal = Math.min(Math.max(lerp, 0), 1);
+        value.set(newVal);
       };
     
       const stopUpdate = () => {

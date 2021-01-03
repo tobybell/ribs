@@ -1,6 +1,6 @@
-import { Data, DataStore } from './data-stuff';
+import { Data, DataStore, Quantity, Time, Value } from './data-stuff';
 
-import { Stream, state, just, map, join } from './stream-stuff';
+import { Stream, state, just, map, join, stream } from './stream-stuff';
 import { Cleanup, cleanup } from "./temporary-stuff";
 import { posaphore } from "./posaphore";
 import { elem } from "./elem";
@@ -10,11 +10,18 @@ import { div } from "./div";
 import { ticks, scaleLinear } from 'd3';
 import { WindowControls, windowEnvironment, windowPane } from './window-stuff';
 import { simpleTitleBar } from './toolbar-bar';
-import { Finder } from './finder';
+import { Finder } from './apps/Finder';
 import { menu, menuItem, menuSeparator } from './menu';
 import { desktop } from './desktop';
-import { emitterApp } from './emitter-app';
-import { WifiApp } from './wifi-app';
+import { Emitter } from './apps/Emitter';
+import { PreferredNetworks } from './apps/PreferredNetworks';
+import { Quantities } from './apps/Quantities';
+import { protocolWriter } from './protocol-writer';
+import { protocolReader } from './protocol-reader';
+import { SetStream } from './set-stuff';
+import { noop } from './function-stuff';
+import { connect } from './connection';
+import { binsert } from './bsearch';
 
 type Handler<T> = (x: T) => void;
 
@@ -361,21 +368,39 @@ Plot should be able to subscribe to a region of data.
 If would be nice if the data provider could just hand us some data that should be plotted on the plot, then the plot doesn't need to care about it.
 */
 
-const connect = () => {
-  const ws = new WebSocket('ws://localhost:3000');
-  ws.onmessage = x => console.log('received', x.data);
-  return ws;
-}
-
-const ws = connect();
+const conn = connect();
 
 const onRequest = (region: Limits) => {
   console.log('request', region);
 };
 
+const dada: Stream<Data> = h => {
+  const result: Data = { t: [], y: [] };
+  return conn.qSeries(15)({
+    change(x) {
+      console.log('data init', x);
+      result.t = Array(x.size);
+      result.y = Array(x.size);
+      let i = 0;
+      for (const v of x) {
+        result.t[i] = v.time;
+        result.y[i++] = v.value;
+      }
+      h(result);
+    },
+    add(x) {
+      console.log('dada adding', x);
+      const i = binsert(result.t, x.time, (a, b) => a - b);
+      result.y.splice(i, 0, x.value);
+      h(result);
+    },
+    remove(x) {},
+  });
+};
+
 const [xlim, setXlim] = state([0, 1] as Limits);
 const [ylim, setYlim] = state([0, 1] as Limits);
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, data, onRequest));
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, dada, onRequest));
 
 // setInterval(() => appendPoint(Math.random(), Math.random()), 500);
 
@@ -397,15 +422,18 @@ const appleMenu = menu([
   menuItem({ label: 'Log Out Toby Bell...' }),
 ], undefined, true);
 
+const eApp = Emitter(conn.writer);
+const qApp = Quantities(conn.quantities, conn.qNames, conn.writer);
+
 const safariMenu = menu([
   menuItem({ label: 'About Safari', action: () => addWindow(Finder) }),
   menuItem({ label: 'Safari Extensions...', action: () => addWindow(plot) }),
   menuSeparator,
-  menuItem({ label: 'Preferences...', action: () => addWindow(emitterApp) }),
-  menuItem({ label: 'Privacy Report...', action: () => addWindow(WifiApp) }),
+  menuItem({ label: 'Preferences...', action: () => addWindow(eApp) }),
+  menuItem({ label: 'Privacy Report...', action: () => addWindow(PreferredNetworks) }),
   menuItem({ label: 'Settings for This Website...' }),
   menuSeparator,
-  menuItem({ label: 'Clear History...' }),
+  menuItem({ label: 'Clear History...', action: () => addWindow(qApp) }),
   menuSeparator,
   menuItem({ label: 'Services' }),
   menuSeparator,
@@ -421,5 +449,5 @@ const dt = desktop(windows, safariMenu);
 render(dt, document.body);
 
 addWindow(Finder);
-addWindow(emitterApp);
-// addWindow(plot);
+addWindow(eApp);
+addWindow(qApp);

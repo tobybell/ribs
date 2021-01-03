@@ -6,7 +6,43 @@ import { Handler } from "./stream-stuff";
 type Message = ArrayBuffer;
 type MessageHandler = Handler<Message>;
 
-class ProtocolWriter {
+type Struct<T extends any[]> = (...x: T) => Builder;
+type Builder = (v: DataView, o: number) => number;
+
+const te = new TextEncoder();
+
+const u8: Struct<[number]> = x => (v, o) => (v.setUint8(o, x), o + 1);
+const u32: Struct<[number]> = x => (v, o) => (v.setUint32(o, x, true), o + 4);
+const f64: Struct<[number]> = x => (v, o) => (v.setFloat64(o, x, true), o + 8);
+const pack: Struct<Builder[]> = (...x) => (v, o) => {
+  const n = x.length;
+  for (let i = 0; i < n; i += 1) {
+    o = x[i](v, o);
+  }
+  return o;
+}
+
+const lputf8: Struct<[string]> = x => (v, o) => {
+  const e = te.encode(x);
+  const n = e.byteLength;
+  v.setUint32(o, n, true);
+  new Uint8Array(v.buffer).set(e, o + 4);
+  return o + 4 + n;
+};
+
+function build(...mods: Builder[]) {
+  const buf = new ArrayBuffer(1000);
+  const view = new DataView(buf);
+  let o = 0;
+  for (let i = 0; i < mods.length; i += 1) {
+    o = mods[i](view, o);
+  }
+  return buf.slice(0, o);
+}
+
+const vec = <T>(f: (x: T) => Builder): Struct<[T[]]> => x => pack(u32(x.length), ...x.map(f));
+
+export class ProtocolWriter {
 
   private handle: MessageHandler;
 
@@ -14,28 +50,68 @@ class ProtocolWriter {
     this.handle = h;
   }
 
+  private send(...mods: Builder[]) {
+    this.handle(build(...mods));
+  }
+
+  private message(type: number, ...mods: Builder[]) {
+    this.send(u8(type), ...mods);
+  }
+
   addPoint(q: Quantity, t: Time, v: Value) {
-    const buf = new ArrayBuffer(21);
-    const view = new DataView(buf);
-    view.setUint8(0, 0);
-    view.setUint32(1, q, true);
-    view.setFloat64(5, t, true);
-    view.setFloat64(13, v, true);
-    this.handle(buf);
+    this.message(0, u32(q), f64(t), f64(v));
   }
 
   addPoints(q: Quantity, v: ValuePair[]) {
-    const n = v.length;
-    const buf = new ArrayBuffer(9 + 16 * n);
-    const view = new DataView(buf);
-    view.setUint8(0, 1);
-    view.setUint32(1, q, true);
-    view.setUint32(5, n, true);
-    for (let i = 0; i < n; i += 1) {
-      view.setFloat64(9 + 16 * i, v[i][0], true);
-      view.setFloat64(17 + 16 * i, v[i][1], true);
-    }
-    this.handle(buf);
+    this.message(1, u32(q), vec<ValuePair>(p => pack(f64(p.time), f64(p.value)))(v));
+  }
+
+  subscribeSeries(q: Quantity) {
+    this.message(2, u32(q));
+  }
+
+  unsubscribeSeries(q: Quantity) {
+    this.message(3, u32(q));
+  }
+
+  quantitiesChanged(q: Quantity[]) {
+    this.message(6, vec(u32)(q));
+  }
+
+  quantitiesAdded(q: Quantity) {
+    this.message(4, u32(q));
+  }
+
+  quantitiesRemoved(q: Quantity) {
+    this.message(5, u32(q));
+  }
+
+  devAddQuantity(q: Quantity) {
+    this.message(7, u32(q));
+  }
+
+  devRemoveQuantity(q: Quantity) {
+    this.message(8, u32(q));
+  }
+
+  subscribeQuantities() {
+    this.message(9);
+  }
+
+  unsubscribeQuantities() {
+    this.message(10);
+  }
+  
+  subscribeQuantityName(q: number) {
+    this.message(11, u32(q));
+  }
+
+  unsubscribeQuantityName(q: number) {
+    this.message(12, u32(q));
+  }
+
+  setQuantityName(q: number, x: string) {
+    this.message(14, u32(q), lputf8(x));
   }
 }
 

@@ -1,15 +1,16 @@
-import { win } from "./window-stuff";
-import { Handler, just, map, state, Stream } from "./stream-stuff";
-import { oneHot } from "./one-hot";
-import { checkbox, radio, select, slider } from "./controls";
-import { windowPane } from "./window-stuff";
-import { div } from "./div";
-import { contextMenu } from "./context-menu";
-import { menu, menuItem, menuSeparator } from "./menu";
-import { toolbarBar } from "./toolbar-bar";
-import { Component, mount, streamComp } from "./component";
-import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "./icons";
-import { formSection, formSeparator } from "./form";
+import { win } from "../window-stuff";
+import { Handler, just, map, Stream, streamComp } from "../stream-stuff";
+import { oneHot } from "../one-hot";
+import { checkbox, radio, select, slider } from "../controls";
+import { windowPane } from "../window-stuff";
+import { div } from "../div";
+import { contextMenu } from "../context-menu";
+import { menu, menuItem, menuSeparator } from "../menu";
+import { toolbarBar } from "../toolbar-bar";
+import { Component, mount } from "../component";
+import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "../icons";
+import { formSection, formSeparator } from "../form";
+import { state, Sync } from "../state";
 
 function space(size: number) {
   const div = document.createElement('div');
@@ -82,7 +83,7 @@ function item({ title, icon, level = 0, active = false, expanded = just(false), 
   ]);
 }
 
-function sidebar(expanded: Stream<boolean>, setExpanded: any) {
+function sidebar(expanded: Sync<boolean>) {
   return div({
     backgroundColor: '#29282a',
     width: '150px',
@@ -94,9 +95,9 @@ function sidebar(expanded: Stream<boolean>, setExpanded: any) {
         title: 'iCloud Drive',
         icon: sidebariCloudIcon(),
         active: true,
-        expanded,
-        onExpand: () => setExpanded(true),
-        onCollapse: () => setExpanded(false),
+        expanded: expanded.get,
+        onExpand: () => expanded.set(true),
+        onCollapse: () => expanded.set(false),
         children: [
           item({title: 'Documents', level: 1, icon: sidebarDocumentsFolderIcon()}),
           item({title: 'Desktop', level: 1, icon: sidebarDesktopFolderIcon()}),
@@ -124,9 +125,9 @@ function sidebar(expanded: Stream<boolean>, setExpanded: any) {
 }
 
 export const Finder = win(c => {
-  const [expanded, setExpanded] = state(false);
-  const [which, setWhich] = state(0);
-  const a = oneHot(which);
+  const expanded = state(false);
+  const which = state(0);
+  const a = oneHot(which.get);
   const content = windowPane([
     toolbarBar(c.handles.middle, c.close),
     div({
@@ -134,16 +135,16 @@ export const Finder = win(c => {
       display: 'flex',
       alignItems: 'stretch',
     }, [
-      sidebar(expanded, setExpanded),
+      sidebar(expanded),
       div({ flex: '1 0 0' }, [
-        formSection(radio(a(0), () => setWhich(0))),
-        formSection(radio(a(1), () => setWhich(1))),
-        formSection(radio(a(2), () => setWhich(2))),
+        formSection(radio(a(0), () => which.set(0))),
+        formSection(radio(a(1), () => which.set(1))),
+        formSection(radio(a(2), () => which.set(2))),
         formSeparator(),
-        formSection(checkbox(...state(false))),
-        formSection(checkbox(...state(true))),
+        formSection(checkbox(state(false))),
+        formSection(checkbox(state(true))),
         select(),
-        slider(...state(.5)),
+        slider(state(.5)),
       ]),
     ]),
   ], [

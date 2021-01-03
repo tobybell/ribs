@@ -1,5 +1,7 @@
+import { noop } from "./function-stuff";
 import { posaphore } from "./posaphore";
-import { state, Stream } from "./stream-stuff";
+import { state, State } from "./state";
+import { Stream, state as oldState } from "./stream-stuff";
 import { cleanup, Cleanup } from "./temporary-stuff";
 
 export interface ArrayHandler<T> {
@@ -77,7 +79,7 @@ export class MutableArray<T> implements ArrayState<T> {
 export const array = <T>(x: T[]) => new MutableArray(x);
 
 export function length<T>(x: ArrayStream<T>): Stream<number> {
-  const [get, set] = state(0);
+  const [get, set] = oldState(0);
   const enable = posaphore(() => x({
     init(d) { set(d.length); },
     insert(d) { set(d.length); },
@@ -89,14 +91,12 @@ export function length<T>(x: ArrayStream<T>): Stream<number> {
 
 export function arrayMap<T, S>(src: ArrayStream<T>, fn: (x: T, i: number) => S): ArrayStream<S> {
   const array = new MutableArray<S>();
-  const enable = posaphore(() => {
-    return src({
-      init: (d) => array.init(d.map(fn)),
-      insert: (d, at) => array.insert(at, fn(d[at], at)),
-      remove: (_, at) => array.remove(at),
-      move: (_, from, to) => array.move(from, to),
-    });
-  });
+  const enable = posaphore(() => src({
+    init: (d) => array.init(d.map(fn)),
+    insert: (d, at) => array.insert(at, fn(d[at], at)),
+    remove: (_, at) => array.remove(at),
+    move: (_, from, to) => array.move(from, to),
+  }));
   return h => cleanup(enable(), array.stream(h));
 }
 
@@ -109,4 +109,30 @@ export function move<T>(array: T[], from: number, to: number) {
     for (let i = from; i > to; i -= 1)
       array[i] = array[i - 1];
   array[to] = tmp;
+}
+
+export function contains<T>(array: ArrayStream<T>, value: State<T>): State<boolean> {
+  let currArr: T[];
+  const result = state(false);
+  const enable = posaphore(() => cleanup(
+    array({
+      init(d) {
+        currArr = d;
+        result.set(d.indexOf(value.value) !== -1);
+      },
+      insert(d, i) {
+        if (d[i] === value.value)
+          result.set(true);
+      },
+      remove(_0, _1, old) {
+        if (old === value.value)
+          result.set(false);
+      },
+      move: noop,
+    }),
+    value.get(x => result.set(currArr.indexOf(x) !== -1)),
+  ));
+  const oldGet = result.get;
+  result.get = h => cleanup(enable(), oldGet(h));
+  return result;
 }

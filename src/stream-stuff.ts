@@ -1,5 +1,5 @@
 import { noop, Thunk } from './function-stuff';
-import { Cleanup, cleanup, Temporary } from './temporary-stuff';
+import { Cleanup, cleanup, empty, Temporary } from './temporary-stuff';
 
 export type Unsubscriber = () => void;
 export type Handler<T> = (x: T) => void;
@@ -206,7 +206,7 @@ export const any = (streams: Stream<boolean>[]) =>
 export const not = (s: Stream<boolean>) => map(s, x => !x);
 
 /** If all of the streams evaluate to true. */
-export const all = (streams: Stream<boolean>[]) => {
+export const all = (...streams: Stream<boolean>[]) => {
   const n = streams.length;
   return unique(map(countTrue(streams), x => x === n));
 };
@@ -237,3 +237,15 @@ export const trigger = (s: Stream<boolean>, f: Temporary) => {
     if (curr) curr();
   };
 };
+
+export const streamComp = <T>(s: Stream<Temporary<T>>): Temporary<T> => r => {
+  let old = noop;
+  return cleanup(
+    s(x => (old(), old = x(r))),
+    () => old(),
+  );
+};
+
+export function enable<T = void>(s: Stream<boolean>, c: Temporary<T>): Temporary<T> {
+  return streamComp(map(s, x => x ? c : empty));
+}

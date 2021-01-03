@@ -4,10 +4,12 @@ import { div, rawInput, style } from "./div";
 import { focusHighlight } from "./focus-stuff";
 import { Thunk } from "./function-stuff";
 import { row, space } from "./layout";
-import { Stream, state } from "./stream-stuff";
+import { Sync } from "./state";
+import { Stream, state, Handler } from "./stream-stuff";
 
-export function textField(value: Stream<string>, size = 13): Component {
+export function textField(value: Sync<string>, size = 13): Component {
   const [highlight, setHighlight] = state(false);
+  let pre: string;
   return div({
     boxSizing: "border-box",
     padding: '0 4px',
@@ -33,16 +35,30 @@ export function textField(value: Stream<string>, size = 13): Component {
         width: "100%",
       }),
       inputType("text"),
-      inputValue(value),
-      domEvent("focus", () => setHighlight(true)),
-      domEvent("blur", () => setHighlight(false)),
+      inputValue(value.get),
+      // TODO: Move this somewhere else so other text inputs can use it?
+      n => domEvent("keypress", e => {
+        if (e.key === "Enter") {
+          e.stopPropagation();
+          e.preventDefault();
+          n.blur();
+        }
+      })(n),
+      n => domEvent("focus", () => {
+        pre = n.value;
+        setHighlight(true);
+      })(n),
+      n => domEvent("blur", () => {
+        n.value !== pre && value.set(n.value);
+        setHighlight(false);
+      })(n),
     ),
   ], [
     focusHighlight(highlight),
   ]);
 }
 
-export function upDownField(value: Stream<string>, onUp: Thunk, onDown: Thunk) {
+export function upDownField(value: Sync<string>, onUp: Thunk, onDown: Thunk) {
   return row([
     div({ flex: "1 0 50px" }, [textField(value, 12)]),
     space(5),
