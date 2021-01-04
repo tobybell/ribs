@@ -17,6 +17,7 @@ import { simpleTitleBar } from "./toolbar-bar";
 import { WindowControls, windowEnvironment, windowPane } from "./window-stuff";
 
 import { scaleLinear, ticks } from "d3";
+import { noop } from "./function-stuff";
 
 type Handler<T> = (x: T) => void;
 
@@ -65,16 +66,22 @@ const makeData = () => {
   return { x: dataX, y: data };
 }
 
+interface PlotOptions {
+  requestRegion?: Handler<Limits>;
+  title?: Stream<string>;
+}
+
 const Plot2D = (
   xlim: Stream<Limits>,
   ylim: Stream<Limits>,
   onSetXLim: Handler<Limits>,
   onSetYLim: Handler<Limits>,
   data: Stream<Data>,
-  requestRegion: Handler<Limits>,
+  {
+    requestRegion = noop,
+    title = just("Plot"),
+  }: PlotOptions = {},
 ): Component => {
-
-  const title = just('Stock price');
   const xLabel = just('Time [d]');
   const yLabel = just('Price [$]');
 
@@ -155,6 +162,36 @@ const Plot2D = (
         y0 = ys.invert(e.clientY - rect.top);
         window.addEventListener('mousemove', updateDrag);
         window.addEventListener('mouseup', finishDrag);
+      })(canvas));
+      cleanups.push(domEvent('wheel', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const { deltaX, deltaY } = e;
+        if (e.altKey || e.ctrlKey) {
+          if (deltaY) {
+            const [xda, xdb] = xs.domain();
+            const [yda, ydb] = ys.domain();
+            const rect = canvas.getBoundingClientRect();
+            const xc = xs.invert(e.clientX - rect.left);
+            const yc = ys.invert(e.clientY - rect.top);
+            const sf = Math.exp(deltaY * .01);
+            onSetXLim([xc + sf * (xda - xc), xc + sf * (xdb - xc)]);
+            onSetYLim([yc + sf * (yda - yc), yc + sf * (ydb - yc)]);
+          }
+        } else {
+          if (deltaX) {
+            const [xda, xdb] = xs.domain();
+            const [xra, xrb] = xs.range();
+            const dx = deltaX * (xdb - xda) / (xrb - xra);
+            onSetXLim([xda + dx, xdb + dx]);
+          }
+          if (deltaY) {
+            const [yda, ydb] = ys.domain();
+            const [yra, yrb] = ys.range();
+            const dy = deltaY * (ydb - yda) / (yrb - yra);
+            onSetYLim([yda + dy, ydb + dy]);
+          }
+        }
       })(canvas));
       cleanups.push(cleanupDrag);
 
@@ -371,9 +408,8 @@ const onRequest = (region: Limits) => {
 
 const dada: Stream<Data> = h => {
   const result: Data = { t: [], y: [] };
-  return conn.qSeries(15)({
-    change(x) {
-      console.log('data init', x);
+  return conn.quantityData(15)({
+    init(x) {
       result.t = Array(x.size);
       result.y = Array(x.size);
       let i = 0;
@@ -384,18 +420,20 @@ const dada: Stream<Data> = h => {
       h(result);
     },
     add(x) {
-      console.log('dada adding', x);
       const i = binsert(result.t, x.time, (a, b) => a - b);
       result.y.splice(i, 0, x.value);
       h(result);
     },
-    remove(x) {},
   });
 };
 
+
 const [xlim, setXlim] = state([0, 1] as Limits);
-const [ylim, setYlim] = state([0, 1] as Limits);
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, dada, onRequest));
+const [ylim, setYlim] = state([0, 1] as Limits)
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, dada, {
+  requestRegion: onRequest,
+  title: conn.quantityName(15).get,
+}));
 
 // setInterval(() => appendPoint(Math.random(), Math.random()), 500);
 
@@ -418,7 +456,7 @@ const appleMenu = menu([
 ], undefined, true);
 
 const eApp = Emitter(conn.writer);
-const qApp = Quantities(conn.quantities, conn.qNames, conn.writer);
+const qApp = Quantities(conn.quantities, conn.quantityName, conn.writer);
 
 const safariMenu = menu([
   menuItem({ label: 'About Safari', action: () => addWindow(Finder) }),

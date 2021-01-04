@@ -1,3 +1,4 @@
+import { addOnlySet, AddOnlySetHandler, AddOnlySetStream, MutableAddOnlySet } from "./add-only-set";
 import { Quantity, ValuePair } from "./data-stuff";
 import { posaphore } from "./posaphore";
 import { protocolReader } from "./protocol-reader";
@@ -17,8 +18,8 @@ interface ServerContent {
   close: Cleanup;
   writer: ProtocolWriter;
 
-  qNames: (q: Quantity) => Sync<string>;
-  qSeries: (q: Quantity) => SetStream<ValuePair>;
+  quantityName: (q: Quantity) => Sync<string>;
+  quantityData: (q: Quantity) => AddOnlySetStream<ValuePair>;
 }
 
 function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporary<void>) {
@@ -66,7 +67,7 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
 const temporarySet = <T>(s: SetStream<Temporary<T>>): Temporary<T> => x => {
   let us = new Map<Temporary<T>, Cleanup>();
   return s({
-    change(a) {
+    init(a) {
       us.forEach(u => u());
       a.forEach(t => us.set(t, t(x)));
     },
@@ -87,7 +88,7 @@ export function connect(): ServerContent {
   const connectedEffect = temporarySet(connectedEffects);
 
   const read = protocolReader({
-    quantitiesChanged(q) { cqm.change(q); },
+    quantitiesChanged(q) { cqm.init(q); },
     quantitiesAdded(q) { cqm.add(q); },
     quantitiesRemoved(q) { cqm.remove(q); },
     quantityNameChanged(q, s) { cachedNames.get(q)?.[1](s); },
@@ -95,7 +96,7 @@ export function connect(): ServerContent {
       cachedSeries.get(q)?.[1].add(p);
     },
     seriesChanged(q, p) {
-      cachedSeries.get(q)?.[1].change(new Set(p));
+      cachedSeries.get(q)?.[1].init(new Set(p));
     },
   });
 
@@ -118,14 +119,14 @@ export function connect(): ServerContent {
   });
 
   const cachedNames = new Map<Quantity, [Sync<string>, Handler<string>]>();
-  const cachedSeries = new Map<Quantity,  [SetStream<ValuePair>, SetHandler<ValuePair>]>();
-  
+  const cachedSeries = new Map<Quantity,  [AddOnlySetStream<ValuePair>, MutableAddOnlySet<ValuePair>]>();
+
   mce.add(subQuantities);
 
   const qNames = (q: Quantity) => {
     let s = cachedNames.get(q);
     if (!s) {
-      const rawS = state("Unknown");
+      const raw = state("Unknown");
       const interested = state(false);
       const enableInterest = posaphore(enabler(interested.set));
       let to: number | undefined;
@@ -142,9 +143,9 @@ export function connect(): ServerContent {
       });
       mce.add(subName);
       s = [{
-        get: h => cleanup(enableInterest(), rawS.get(h)),
+        get: h => cleanup(enableInterest(), raw.get(h)),
         set: x => writer.setQuantityName(q, x),
-      }, rawS.set];
+      }, raw.set];
       cachedNames.set(q, s);
     }
     return s[0];
@@ -153,7 +154,7 @@ export function connect(): ServerContent {
   const qSeries = (q: Quantity) => {
     let s = cachedSeries.get(q);
     if (!s) {
-      const [rawSet, rawSetHandler] = mutableSet<ValuePair>();
+      const raw = addOnlySet<ValuePair>();
       const interested = state(false);
       const enableInterest = posaphore(enabler(interested.set));
       let to: number | undefined;
@@ -169,7 +170,7 @@ export function connect(): ServerContent {
         }
       });
       mce.add(subber);
-      s = [h => cleanup(enableInterest(), rawSet(h)), rawSetHandler];
+      s = [h => cleanup(enableInterest(), raw.stream(h)), raw];
       cachedSeries.set(q, s);
     }
     return s[0];
@@ -179,7 +180,7 @@ export function connect(): ServerContent {
     writer,
     quantities: h => cleanup(enableInterestedInQuantities(), cachedQuantities(h)),
     close: cleanup(conn.close),
-    qNames,
-    qSeries,
+    quantityName: qNames,
+    quantityData: qSeries,
   };
 }

@@ -4,7 +4,7 @@ import { Handler } from "./stream-stuff";
 import { Cleanup } from "./temporary-stuff";
 
 export interface SetHandler<T> {
-  change: Handler<Set<T>>;
+  init: Handler<Set<T>>;
 
   /** A conformant stream must only call this if the value is not already in
    * the set. */
@@ -25,11 +25,11 @@ export function mutableSet<T>(): [SetStream<T>, SetHandler<T>] {
 
   return [
     h => {
-      h.change(value);
+      h.init(value);
       subs.add(h);
       return () => subs.delete(h);
     }, {
-      change: x => (value = x, subs.forEach(h => h.change(x))),
+      init: x => (value = x, subs.forEach(h => h.init(x))),
       add: x => value.has(x) || (value.add(x), subs.forEach(h => h.add(x))),
       remove: x => value.delete(x) && subs.forEach(h => h.remove(x)),
     }
@@ -40,7 +40,7 @@ export function set2arr<T>(x: SetStream<T>, cmp: (a: T, b: T) => number): ArrayS
   return h => {
     let arr: T[] = [];
     return x({
-      change(x) {
+      init(x) {
         arr = [...x];
         arr.sort(cmp);
         h.init(arr);
