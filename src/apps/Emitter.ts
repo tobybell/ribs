@@ -35,7 +35,7 @@ function mutable<T>(obj: T): Mutable<T> {
   keys(obj).forEach(k => {
     const [str, send] = stream<T[keyof T]>();
     mut[k] = {
-      get: h => (h(o[k]), str(h)),
+      stream: h => (h(o[k]), str(h)),
       set: (x: any) => {
         o[k] = x;
         send(x);
@@ -102,7 +102,7 @@ export const Emitter = (w: ProtocolWriter) => win(c => {
     if (!isNaN(p)) f(p);
   };
   const mapSync = <T, S>(s: Sync<T>, to: (x: T) => S, from: (h: Handler<T>) => Handler<S>): Sync<S> => ({
-    get: map(s.get, to),
+    stream: map(s.stream, to),
     set: from(s.set),
   });
 
@@ -112,7 +112,7 @@ export const Emitter = (w: ProtocolWriter) => win(c => {
   ]);
 
   const ud = upDownField({
-    get: map(quantity.get, String),
+    stream: map(quantity.stream, String),
     set: parseI(quantity.set),
   }, incr, decr);
   const pane = windowPane([
@@ -124,7 +124,7 @@ export const Emitter = (w: ProtocolWriter) => win(c => {
     submitSection(button(just("Add Point"), addPoint)),
     formSeparator(),
     formSection(table(points.stream, fields.stream, selected)),
-    formSection(plusMinusButton(addTablePoint, removeSelectedPoint, hasSelection.get)),
+    formSection(plusMinusButton(addTablePoint, removeSelectedPoint, hasSelection.stream)),
     submitSection(button(just("Add Points"), addPoints)),
   ]);
   return pane;

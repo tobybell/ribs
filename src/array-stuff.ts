@@ -130,9 +130,9 @@ export function contains<T>(array: ArrayStream<T>, value: State<T>): State<boole
       },
       move: noop,
     }),
-    value.get(x => result.set(currArr.indexOf(x) !== -1)),
+    value.stream(x => result.set(currArr.indexOf(x) !== -1)),
   ));
-  const oldGet = result.get;
-  result.get = h => cleanup(enable(), oldGet(h));
+  const oldGet = result.stream;
+  result.stream = h => cleanup(enable(), oldGet(h));
   return result;
 }

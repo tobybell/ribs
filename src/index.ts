@@ -5,13 +5,13 @@ import { Quantities } from "./apps/Quantities";
 import { binsert } from "./bsearch";
 import { Component, domEvent, Effect, mount, render } from "./component";
 import { connect } from "./connection";
-import { Data, DataStore } from "./data-stuff";
+import { Data, DataStore, Quantity } from "./data-stuff";
 import { desktop } from "./desktop";
 import { div } from "./div";
 import { elem } from "./elem";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
-import { join, just, map, state, Stream } from "./stream-stuff";
+import { join, just, map, state, Stream, zip } from "./stream-stuff";
 import { Cleanup, cleanup } from "./temporary-stuff";
 import { simpleTitleBar } from "./toolbar-bar";
 import { WindowControls, windowEnvironment, windowPane } from "./window-stuff";
@@ -76,7 +76,7 @@ const Plot2D = (
   ylim: Stream<Limits>,
   onSetXLim: Handler<Limits>,
   onSetYLim: Handler<Limits>,
-  data: Stream<Data>,
+  data: Stream<Data>[],
   {
     requestRegion = noop,
     title = just("Plot"),
@@ -203,7 +203,7 @@ const Plot2D = (
         ctx.scale(2, 2);
       }));
 
-      const axisConfig = join({ size, xlim, ylim, xLabel, yLabel, title, data });
+      const axisConfig = join({ size, xlim, ylim, xLabel, yLabel, title, data: zip(data) });
 
       interface AxisConfig {
         size: RectSize;
@@ -212,7 +212,7 @@ const Plot2D = (
         title?: string;
         xLabel?: string;
         yLabel?: string;
-        data: Data;
+        data: Data[];
       }
 
       // Whenever width changes, need to compute a new left and right.
@@ -261,15 +261,16 @@ const Plot2D = (
         }
         ctx.stroke();
 
-        const {t: dx, y: dy} = data;
-        const N = dx.length;
-        ctx.strokeStyle = '#2965CC';
-        ctx.beginPath();
-        ctx.moveTo(xs(dx[0]), ys(dy[0]));
-        for (let i = 1; i <= N; i += 1) {
-          ctx.lineTo(xs(dx[i]), ys(dy[i]));
+        for (const {t: dx, y: dy} of data) {
+          const N = dx.length;
+          ctx.strokeStyle = '#2965CC';
+          ctx.beginPath();
+          ctx.moveTo(xs(dx[0]), ys(dy[0]));
+          for (let i = 1; i <= N; i += 1) {
+            ctx.lineTo(xs(dx[i]), ys(dy[i]));
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
 
         // Draw borders.
         ctx.strokeStyle = '#000';
@@ -406,9 +407,9 @@ const onRequest = (region: Limits) => {
   console.log('request', region);
 };
 
-const dada: Stream<Data> = h => {
+const dada = (q: Quantity): Stream<Data> => h => {
   const result: Data = { t: [], y: [] };
-  return conn.quantityData(15)({
+  return conn.quantityData(q).stream({
     init(x) {
       result.t = Array(x.size);
       result.y = Array(x.size);
@@ -430,9 +431,9 @@ const dada: Stream<Data> = h => {
 
 const [xlim, setXlim] = state([0, 1] as Limits);
 const [ylim, setYlim] = state([0, 1] as Limits)
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, dada, {
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, [dada(15), dada(16), dada(17)], {
   requestRegion: onRequest,
-  title: conn.quantityName(15).get,
+  title: conn.quantityName(15).stream,
 }));
 
 // setInterval(() => appendPoint(Math.random(), Math.random()), 500);
@@ -484,3 +485,12 @@ render(dt, document.body);
 addWindow(Finder);
 addWindow(eApp);
 addWindow(qApp);
+
+(window as any).plot = function(ns: number[]) {
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
+    requestRegion: onRequest,
+    title: conn.quantityName(ns[0] || 0).stream,
+  });
+  const win = SimpleWindow("Custom", plot);
+  addWindow(win);
+}

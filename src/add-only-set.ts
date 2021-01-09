@@ -25,12 +25,12 @@ export interface AddOnlySet<T> {
 
 // NOTE: As of 2020 Jan 3 this is structurally the same as `AddOnlySetHandler`
 // but it is safe to call `add` repeatedly using this interface.
-export interface MutableAddOnlySet<T> {
+export interface MutableAddOnlySet<T> extends AddOnlySet<T> {
   init: Handler<Set<T>>;
   add: Handler<T>;
 }
 
-export function addOnlySet<T>(): AddOnlySet<T> & MutableAddOnlySet<T> {
+export function addOnlySet<T>(): MutableAddOnlySet<T> {
   let curr = new Set<T>();
   const handlers = new Set<AddOnlySetHandler<T>>();
 

@@ -49,7 +49,7 @@ export const square = (dt: number) => reduce(tick(dt), a => !a, false);
 export const rsquare = () => square(Math.random());
 
 /** Join two streams into a stream of array pairs. */
-const zip = <T extends readonly any[]>(ss: {[K in keyof T]: Stream<T[K]>}): Stream<{-readonly [K in keyof T]: T[K]}> => {
+export const zip = <T extends readonly any[]>(ss: {[K in keyof T]: Stream<T[K]>}): Stream<{-readonly [K in keyof T]: T[K]}> => {
   const n = ss.length;
   return h => {
     let nRemaining = n;

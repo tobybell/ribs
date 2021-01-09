@@ -10,7 +10,7 @@ export interface Writable<T> {
 }
 
 export interface Streamable<T> {
-  get: Stream<T>;
+  stream: Stream<T>;
 }
 
 export type Sync<T> = Streamable<T> & Writable<T>;
@@ -22,7 +22,7 @@ export function state<T>(init: T): MutableState<T> {
   const result = blank<MutableState<T>>();
   const [str, send] = stream<T>();
   result.value = init;
-  result.get = h => (h(result.value), str(h));
+  result.stream = h => (h(result.value), str(h));
   result.set = x => (result.value = x, send(x));
   return result;
 }

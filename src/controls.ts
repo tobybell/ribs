@@ -39,14 +39,14 @@ export function checkbox(checked: Sync<boolean>) {
     width: '14px',
     height: '14px',
     borderRadius: '3px',
-    backgroundImage: either(checked.get, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
+    backgroundImage: either(checked.stream, 'linear-gradient(#3367df, #255cc6)', 'linear-gradient(#505152, #6b6c6c)'),
     boxShadow: '0 1px 1px -1px rgba(255, 255, 255, .4) inset, 0 0 1px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .2)',
     overflow: 'hidden',
   }, [
-    enable(checked.get, checkmark()),
+    enable(checked.stream, checkmark()),
     enable(active, div({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,.15)' })),
   ], [
-    () => checked.get(x => isChecked = x),
+    () => checked.stream(x => isChecked = x),
     clickControl(() => checked.set(!isChecked), setActive),
   ]);
 }
@@ -67,7 +67,7 @@ export function slider(value: Sync<number>) {
         backgroundColor: '#3268de',
         height: '100%',
         width: '100%',
-        transform: map(value.get, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
+        transform: map(value.stream, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
       }),
     ]),
     div({
@@ -76,7 +76,7 @@ export function slider(value: Sync<number>) {
       position: 'absolute',
       top: '0',
       left: '0',
-      transform: map(value.get, v => `translateX(calc(${v} * (100% - 15px)))`),
+      transform: map(value.stream, v => `translateX(calc(${v} * (100% - 15px)))`),
     }, [
       div({
         backgroundColor: '#ccc',

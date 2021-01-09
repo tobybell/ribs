@@ -94,7 +94,7 @@ function sidebar(expanded: Sync<boolean>) {
         title: 'iCloud Drive',
         icon: sidebariCloudIcon(),
         active: true,
-        expanded: expanded.get,
+        expanded: expanded.stream,
         onExpand: () => expanded.set(true),
         onCollapse: () => expanded.set(false),
         children: [
@@ -126,7 +126,7 @@ function sidebar(expanded: Sync<boolean>) {
 export const Finder = win(c => {
   const expanded = state(false);
   const which = state(0);
-  const a = oneHot(which.get);
+  const a = oneHot(which.stream);
   const content = windowPane([
     toolbarBar(c.handles.middle, c.close),
     div({

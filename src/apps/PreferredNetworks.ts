@@ -16,7 +16,7 @@ interface Network {
 
 function network(name: string) {
   const ns = state(name);
-  return { name: ns.get, setName: ns.set };
+  return { name: ns.stream, setName: ns.set };
 }
 
 export const PreferredNetworks = win(c => {
@@ -51,7 +51,7 @@ export const PreferredNetworks = win(c => {
   };
 
   const fields = array<Field<Network>>([
-    field("Network Name", n => editableTextCell({ get: n.name, set: console.log })),
+    field("Network Name", n => editableTextCell({ stream: n.name, set: console.log })),
     field("Security", () => textCell("WPA/WPA2 Personal")),
     field("Auto-Join", () => checkboxCell(state(Math.random() >= .5))),
   ]);
@@ -62,7 +62,7 @@ export const PreferredNetworks = win(c => {
     simpleTitleBar("Preferred Networks", c.handles.middle, c.close),
     space(12),
     formSection(table(networks.stream, fields.stream, selected)),
-    formSection(plusMinusButton(addNetwork, removeSelectedNetwork, hasSelection.get)),
+    formSection(plusMinusButton(addNetwork, removeSelectedNetwork, hasSelection.stream)),
   ]);
   return pane;
 });

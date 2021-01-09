@@ -195,7 +195,7 @@ export const checkboxCell = (checked: Sync<boolean>) => basicCell(
 );
 
 export const editableTextCell = (value: Sync<string>): Cell => {
-  const { get: rawFocus, set: setFocus } = state(false);
+  const { stream: rawFocus, set: setFocus } = state(false);
   const focus = unique(rawFocus);
   let pre: string;
   const input = rawInput(
@@ -214,7 +214,7 @@ export const editableTextCell = (value: Sync<string>): Cell => {
       background: "#202020",
     }),
     inputType("text"),
-    inputValue(value.get),
+    inputValue(value.stream),
     // TODO: Move this somewhere else so other text inputs can use it?
     n => domEvent("keypress", e => {
       if (e.key === "Enter") {
@@ -236,7 +236,7 @@ export const editableTextCell = (value: Sync<string>): Cell => {
   return c => {
     const nonInput = span(
       style({ color: "#ffffff", fontSize: "13px" }),
-      children(text(value.get)),
+      children(text(value.stream)),
       mutClick(either(c.selected, () => setFocus(true), undefined)),
     );
     return basicCell(
@@ -369,7 +369,7 @@ function tableColumns<T>(fields: ArrayStream<Field<T>>) {
 }
 
 export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, selected: Sync<T>) {
-  const { rows, cleanupRows } = tableRows(data, selected.get, selected.set);
+  const { rows, cleanupRows } = tableRows(data, selected.stream, selected.set);
   const { cols, full, cleanupColumns } = tableColumns(fields);
 
   const fullPixels = map(full, x => `${x[0]}px`);

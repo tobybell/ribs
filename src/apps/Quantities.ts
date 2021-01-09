@@ -44,7 +44,7 @@ export const Quantities = (q: SetStream<Quantity>, names: (q: Quantity) => Sync<
     simpleTitleBar("Quantities", c.handles.middle, c.close),
     space(12),
     formSection(table(quantities, fields.stream, selected)),
-    formSection(plusMinusButton(addQuantity, removeSelectedQuantity, hasSelection.get)),
+    formSection(plusMinusButton(addQuantity, removeSelectedQuantity, hasSelection.stream)),
   ]);
   return pane;
 });

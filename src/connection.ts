@@ -1,13 +1,13 @@
-import { addOnlySet, AddOnlySetHandler, AddOnlySetStream, MutableAddOnlySet } from "./add-only-set";
+import { AddOnlySet, addOnlySet } from "./add-only-set";
 import { Quantity, ValuePair } from "./data-stuff";
+import { Thunk } from "./function-stuff";
 import { posaphore } from "./posaphore";
 import { protocolReader } from "./protocol-reader";
 import { ProtocolWriter, protocolWriter } from "./protocol-writer";
-import { mutableSet, SetHandler, SetStream } from "./set-stuff";
+import { mutableSet, SetStream } from "./set-stuff";
 import { state, Sync } from "./state";
 import { enable, Handler } from "./stream-stuff";
 import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
-
 
 function enabler(h: Handler<boolean>): Temporary<void> {
   return () => (h(true), () => h(false));
@@ -19,7 +19,7 @@ interface ServerContent {
   writer: ProtocolWriter;
 
   quantityName: (q: Quantity) => Sync<string>;
-  quantityData: (q: Quantity) => AddOnlySetStream<ValuePair>;
+  quantityData: (q: Quantity) => AddOnlySet<ValuePair>;
 }
 
 function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporary<void>) {
@@ -91,12 +91,12 @@ export function connect(): ServerContent {
     quantitiesChanged(q) { cqm.init(q); },
     quantitiesAdded(q) { cqm.add(q); },
     quantitiesRemoved(q) { cqm.remove(q); },
-    quantityNameChanged(q, s) { cachedNames.get(q)?.[1](s); },
+    quantityNameChanged(q, s) { quantityNames.cache.get(q)?.raw.set(s); },
     seriesAdded(q, p) {
-      cachedSeries.get(q)?.[1].add(p);
+      quantitySeries.cache.get(q)?.raw.add(p);
     },
     seriesChanged(q, p) {
-      cachedSeries.get(q)?.[1].init(new Set(p));
+      quantitySeries.cache.get(q)?.raw.init(new Set(p));
     },
   });
 
@@ -113,74 +113,89 @@ export function connect(): ServerContent {
   /** Posaphore for interest in quantities. */
   const enableInterestedInQuantities = posaphore(enabler(interestedInQuantities.set));
 
-  const subQuantities = enable(interestedInQuantities.get, () => {
-    writer.subscribeQuantities();
-    return () => writer.unsubscribeQuantities();
-  });
+  // Experiment: How useful is this function? Creates a simple temporary from
+  // an initializer and deinitializer/cleanup function.
+  const couple = (init: Thunk, deinit: Thunk) => () => (init(), deinit);
 
-  const cachedNames = new Map<Quantity, [Sync<string>, Handler<string>]>();
-  const cachedSeries = new Map<Quantity,  [AddOnlySetStream<ValuePair>, MutableAddOnlySet<ValuePair>]>();
+  const subQuantities = enable(
+    interestedInQuantities.stream,
+    couple(writer.subscribeQuantities, writer.unsubscribeQuantities));
 
   mce.add(subQuantities);
 
-  const qNames = (q: Quantity) => {
-    let s = cachedNames.get(q);
-    if (!s) {
-      const raw = state("Unknown");
-      const interested = state(false);
-      const enableInterest = posaphore(enabler(interested.set));
-      let to: number | undefined;
-      const subName = enable(interested.get, () => {
-        if (to !== undefined) {
-          clearTimeout(to);
-          to = undefined;
-        } else {
-          writer.subscribeQuantityName(q);
-        }
-        return () => {
-          to = setTimeout(() => writer.unsubscribeQuantityName(q), 100);
-        }
-      });
-      mce.add(subName);
-      s = [{
-        get: h => cleanup(enableInterest(), raw.get(h)),
-        set: x => writer.setQuantityName(q, x),
-      }, raw.set];
-      cachedNames.set(q, s);
-    }
-    return s[0];
-  };
+  /**
+   * This is an involved function. It creates a "managed cache" of generic
+   * values that come from the server, where each value is some property of a
+   * quantity---for example, the name of a quantity, or the data for a
+   * quantity. The resulting cache is used to automatically subscribe and
+   * unsubscribe from the remote value using the shared server connection.
+   */
+  function makeManaged<H, Raw, Managed>({
+    makeRaw,
+    makeManaged,
+    subscribe,
+    unsubscribe,
+  }: {
+    makeRaw: () => Raw & { stream: Temporary<H>; };
+    makeManaged: (q: Quantity) => Managed;
+    subscribe: Handler<Quantity>;
+    unsubscribe: Handler<Quantity>;
+  }) {
+    const cache = new Map<Quantity, {
+      raw: Raw;
+      managed: Managed & { stream: Temporary<H> };
+    }>();
+    const getter = (q: Quantity) => {
+      let s = cache.get(q);
+      if (!s) {
+        const raw = makeRaw();
+        const interested = state(false);
+        const enableInterest = posaphore(enabler(interested.set));
+        let to: number | undefined;
+        const subName = enable(interested.stream, () => {
+          if (to !== undefined) {
+            clearTimeout(to);
+            to = undefined;
+          } else {
+            subscribe(q);
+          }
+          return () => {
+            to = setTimeout(() => unsubscribe(q), 100);
+          }
+        });
+        mce.add(subName);
+        s = { raw, managed: {
+          ...makeManaged(q),
+          stream: h => cleanup(enableInterest(), raw.stream(h)),
+        }};
+        cache.set(q, s);
+      }
+      return s.managed;
+    };
+    return { getter, cache };
+  }
 
-  const qSeries = (q: Quantity) => {
-    let s = cachedSeries.get(q);
-    if (!s) {
-      const raw = addOnlySet<ValuePair>();
-      const interested = state(false);
-      const enableInterest = posaphore(enabler(interested.set));
-      let to: number | undefined;
-      const subber = enable(interested.get, () => {
-        if (to !== undefined) {
-          clearTimeout(to);
-          to = undefined;
-        } else {
-          writer.subscribeSeries(q);
-        }
-        return () => {
-          to = setTimeout(() => writer.unsubscribeSeries(q), 100);
-        }
-      });
-      mce.add(subber);
-      s = [h => cleanup(enableInterest(), raw.stream(h)), raw];
-      cachedSeries.set(q, s);
-    }
-    return s[0];
-  };
+  const quantityNames = makeManaged({
+    makeRaw: () => state("Unknown"),
+    makeManaged: q => ({
+      set: (x: string) => writer.setQuantityName(q, x),
+    }),
+    subscribe: writer.subscribeQuantityName,
+    unsubscribe: writer.unsubscribeQuantityName,
+  });
+
+  const quantitySeries = makeManaged({
+    makeRaw: () => addOnlySet<ValuePair>(),
+    makeManaged: () => ({}),
+    subscribe: writer.subscribeSeries,
+    unsubscribe: writer.unsubscribeSeries,
+  });
 
   return {
     writer,
     quantities: h => cleanup(enableInterestedInQuantities(), cachedQuantities(h)),
     close: cleanup(conn.close),
-    quantityName: qNames,
-    quantityData: qSeries,
+    quantityName: quantityNames.getter,
+    quantityData: quantitySeries.getter,
   };
 }

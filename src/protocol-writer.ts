@@ -42,79 +42,81 @@ function build(...mods: Builder[]) {
 
 const vec = <T>(f: (x: T) => Builder): Struct<[T[]]> => x => pack(u32(x.length), ...x.map(f));
 
-export class ProtocolWriter {
-
-  private handle: MessageHandler;
-
-  constructor(h: MessageHandler) {
-    this.handle = h;
-  }
-
-  private send(...mods: Builder[]) {
-    this.handle(build(...mods));
-  }
-
-  private message(type: number, ...mods: Builder[]) {
-    this.send(u8(type), ...mods);
-  }
-
-  addPoint(q: Quantity, t: Time, v: Value) {
-    this.message(0, u32(q), f64(t), f64(v));
-  }
-
-  addPoints(q: Quantity, v: ValuePair[]) {
-    this.message(1, u32(q), vec<ValuePair>(p => pack(f64(p.time), f64(p.value)))(v));
-  }
-
-  subscribeSeries(q: Quantity) {
-    this.message(2, u32(q));
-  }
-
-  unsubscribeSeries(q: Quantity) {
-    this.message(3, u32(q));
-  }
-
-  quantitiesChanged(q: Quantity[]) {
-    this.message(6, vec(u32)(q));
-  }
-
-  quantitiesAdded(q: Quantity) {
-    this.message(4, u32(q));
-  }
-
-  quantitiesRemoved(q: Quantity) {
-    this.message(5, u32(q));
-  }
-
-  devAddQuantity(q: Quantity) {
-    this.message(7, u32(q));
-  }
-
-  devRemoveQuantity(q: Quantity) {
-    this.message(8, u32(q));
-  }
-
-  subscribeQuantities() {
-    this.message(9);
-  }
-
-  unsubscribeQuantities() {
-    this.message(10);
-  }
-  
-  subscribeQuantityName(q: number) {
-    this.message(11, u32(q));
-  }
-
-  unsubscribeQuantityName(q: number) {
-    this.message(12, u32(q));
-  }
-
-  setQuantityName(q: number, x: string) {
-    this.message(14, u32(q), lputf8(x));
-  }
+export interface ProtocolWriter {
+  addPoint: (q: Quantity, t: Time, v: Value) => void;
+  addPoints: (q: Quantity, v: ValuePair[]) => void;
+  subscribeSeries: (q: Quantity) => void;
+  unsubscribeSeries: (q: Quantity) => void;
+  quantitiesChanged: (q: Quantity[]) => void;
+  quantitiesAdded: (q: Quantity) => void;
+  quantitiesRemoved: (q: Quantity) => void;
+  devAddQuantity: (q: Quantity) => void;
+  devRemoveQuantity: (q: Quantity) => void;
+  subscribeQuantities: () => void;
+  unsubscribeQuantities: () => void;
+  subscribeQuantityName: (q: number) => void;
+  unsubscribeQuantityName: (q: number) => void;
+  setQuantityName: (q: number, x: string) => void;
 }
 
-export function protocolWriter(h: MessageHandler) {
-  return new ProtocolWriter(h);
+export function protocolWriter(h: MessageHandler): ProtocolWriter {
+  const send = (...bs: Builder[]) => h(build(...bs));
+  const msg = (type: number, ...bs: Builder[]) => send(u8(type), ...bs);
+  return {
+    addPoint(q, t, v) {
+      msg(0, u32(q), f64(t), f64(v));
+    },
+
+    addPoints(q, v) {
+      msg(1, u32(q), vec<ValuePair>(p => pack(f64(p.time), f64(p.value)))(v));
+    },
+
+    subscribeSeries(q) {
+      msg(2, u32(q));
+    },
+
+    unsubscribeSeries(q) {
+      msg(3, u32(q));
+    },
+
+    quantitiesChanged(q) {
+      msg(6, vec(u32)(q));
+    },
+
+    quantitiesAdded(q) {
+      msg(4, u32(q));
+    },
+
+    quantitiesRemoved(q) {
+      msg(5, u32(q));
+    },
+
+    devAddQuantity(q) {
+      msg(7, u32(q));
+    },
+
+    devRemoveQuantity(q) {
+      msg(8, u32(q));
+    },
+
+    subscribeQuantities() {
+      msg(9);
+    },
+
+    unsubscribeQuantities() {
+      msg(10);
+    },
+    
+    subscribeQuantityName(q) {
+      msg(11, u32(q));
+    },
+
+    unsubscribeQuantityName(q) {
+      msg(12, u32(q));
+    },
+
+    setQuantityName(q, x) {
+      msg(14, u32(q), lputf8(x));
+    },
+  };
 }

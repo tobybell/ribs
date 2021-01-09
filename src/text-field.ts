@@ -35,7 +35,7 @@ export function textField(value: Sync<string>, size = 13): Component {
         width: "100%",
       }),
       inputType("text"),
-      inputValue(value.get),
+      inputValue(value.stream),
       // TODO: Move this somewhere else so other text inputs can use it?
       n => domEvent("keypress", e => {
         if (e.key === "Enter") {
