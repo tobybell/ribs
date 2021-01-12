@@ -14,7 +14,7 @@ export interface AddOnlySetHandler<T> {
    * Handle a value being added to the set. A conformant stream must only call
    * this if the value is not already in the set.
    */
-  add: Handler<T>;
+  add: (e: T, x: Set<T>) => void;
 }
 
 export type AddOnlySetStream<T> = RawStream<AddOnlySetHandler<T>>;
@@ -42,7 +42,7 @@ export function addOnlySet<T>(): MutableAddOnlySet<T> {
     add: x => {
       if (!curr.has(x)) {
         curr.add(x);
-        handlers.forEach(h => h.add(x));
+        handlers.forEach(h => h.add(x, curr));
       }
     },
     stream: h => {

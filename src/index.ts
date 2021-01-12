@@ -5,7 +5,7 @@ import { Quantities } from "./apps/Quantities";
 import { binsert } from "./bsearch";
 import { Component, domEvent, Effect, mount, render } from "./component";
 import { connect } from "./connection";
-import { Data, DataStore, Quantity } from "./data-stuff";
+import { Data, DataStore, Quantity, Time } from "./data-stuff";
 import { desktop } from "./desktop";
 import { div } from "./div";
 import { elem } from "./elem";
@@ -428,9 +428,51 @@ const dada = (q: Quantity): Stream<Data> => h => {
   });
 };
 
+const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
+  const result: Data = { t: [], y: [] };
+  const aT: Time[] = [];
+  const bT: Time[] = [];
+  return cleanup(
+    conn.quantityData(a).stream({
+      init(x) {
+        aT.length = x.size;
+        result.t.length = x.size;
+        let i = 0;
+        for (const v of x) {
+          aT[i] = v.time;
+          result.t[i++] = v.value;
+        }
+        h(result);
+      },
+      add(x) {
+        const i = binsert(aT, x.time, (a, b) => a - b);
+        result.t.splice(i, 0, x.value);
+        h(result);
+      },
+    }),
+    conn.quantityData(b).stream({
+      init(x) {
+        bT.length = x.size;
+        result.y.length = x.size;
+        let i = 0;
+        for (const v of x) {
+          bT[i] = v.time;
+          result.y[i++] = v.value;
+        }
+        h(result);
+      },
+      add(x) {
+        const i = binsert(bT, x.time, (a, b) => a - b);
+        result.y.splice(i, 0, x.value);
+        h(result);
+      },
+    }),
+  );
+};
+
 
 const [xlim, setXlim] = state([0, 1] as Limits);
-const [ylim, setYlim] = state([0, 1] as Limits)
+const [ylim, setYlim] = state([0, 1] as Limits);
 const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, [dada(15), dada(16), dada(17)], {
   requestRegion: onRequest,
   title: conn.quantityName(15).stream,
@@ -487,10 +529,21 @@ addWindow(eApp);
 addWindow(qApp);
 
 (window as any).plot = function(ns: number[]) {
+  const [xlim, setXlim] = state([0, 1] as Limits);
+  const [ylim, setYlim] = state([0, 1] as Limits);
   const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
-    requestRegion: onRequest,
     title: conn.quantityName(ns[0] || 0).stream,
   });
   const win = SimpleWindow("Custom", plot);
   addWindow(win);
-}
+};
+
+(window as any).plot2 = function(x: number, y: number) {
+  const [xlim, setXlim] = state([0, 1] as Limits);
+  const [ylim, setYlim] = state([0, 1] as Limits);
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [naiveDada2(x, y)], {
+    title: map(zip([conn.quantityName(x).stream, conn.quantityName(y).stream]), ([x, y]) => `${y} vs. ${x}`),
+  });
+  const win = SimpleWindow("Custom", plot);
+  addWindow(win);
+};
