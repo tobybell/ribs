@@ -145,9 +145,7 @@ function initBuffers(gl: WebGLRenderingContext, m: Model): Buffers {
   };
 }
 
-let cubeRotation = 0;
-
-function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, deltaTime: number, projectionMatrix: Mat4, numFaces: number) {
+function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, deltaTime: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number) {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
@@ -174,14 +172,9 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
   mat4.translate(modelViewMatrix,     // destination matrix
                  modelViewMatrix,     // matrix to translate
                  [-0.0, 0.0, -6.0]);  // amount to translate
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              cubeRotation,     // amount to rotate in radians
-              [0, 0, 1]);       // axis to rotate around (Z)
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              cubeRotation * .7,// amount to rotate in radians
-              [0, 1, 0]);       // axis to rotate around (X)
+  mat4.multiply(modelViewMatrix,
+                modelViewMatrix,
+                cOrientation);
 
   // Tell WebGL how to pull out the positions from the position
   // buffer into the vertexPosition attribute
@@ -247,10 +240,6 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
     const offset = 0;
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
   }
-
-  // Update the rotation for the next draw
-
-  cubeRotation += deltaTime;
 }
 
 interface ProgramInfo {
@@ -377,6 +366,8 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     zNear,
     zFar);
 
+  const cOrientation = mat4.create();
+
   const o = new ResizeObserver(entries => {
     const entry = entries[entries.length - 1];
     if (entry) {
@@ -397,7 +388,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
         zFar);
 
       gl.viewport(0, 0, w, h);
-      drawScene(gl, programInfo, buffers, 0, projectionMatrix, numFaces);
+      drawScene(gl, programInfo, buffers, 0, cOrientation, projectionMatrix, numFaces);
     }
   });
   o.observe(container);
@@ -454,13 +445,31 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     const deltaTime = now - then;
     then = now;
 
-    drawScene(gl!, programInfo, buffers, deltaTime, projectionMatrix, numFaces);
+    drawScene(gl!, programInfo, buffers, deltaTime, cOrientation, projectionMatrix, numFaces);
 
     requestAnimationFrame(render);
   }
   requestAnimationFrame(render);
 
-  return mount(container, r);
+  // Temporary matrix used for updating the camera view.
+  const tmp = mat4.create();
+
+  return cleanup(
+    mount(container, r),
+    domEvent("wheel", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { deltaX, deltaY } = e;
+      if (e.altKey || e.ctrlKey) {
+        console.log("You tryna Zoom?");
+      } else {
+        mat4.identity(tmp);
+        mat4.rotate(tmp, tmp, -deltaX / 100, [0, 1, 0]);
+        mat4.rotate(tmp, tmp, -deltaY / 100, [1, 0, 0]);
+        mat4.multiply(cOrientation, tmp, cOrientation);
+      }
+    })(canvas),
+  );
 });
 
 interface PlotOptions {
