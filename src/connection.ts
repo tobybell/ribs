@@ -35,7 +35,6 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
     ws.onmessage = e => {
       const { data } = e;
       if (data instanceof Blob) data.arrayBuffer().then(x => {
-        console.log("Receive", x);
         handle(x);
       });
       else console.error("Unexpected WebSocket data", data);
@@ -57,7 +56,6 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
 
   // TODO: Queue up if try to send when not connected?
   const send = (x: ArrayBuffer) => {
-    console.log("Send", new Uint8Array(x));
     ws.send(x);
   };
 
@@ -160,7 +158,7 @@ export function connect(): ServerContent {
             subscribe(q);
           }
           return () => {
-            to = setTimeout(() => unsubscribe(q), 100);
+            to = setTimeout(() => unsubscribe(q), 200);
           }
         });
         mce.add(subName);

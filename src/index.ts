@@ -14,7 +14,9 @@ import { posaphore } from "./posaphore";
 import { join, just, map, state, Stream, zip } from "./stream-stuff";
 import { Cleanup, cleanup } from "./temporary-stuff";
 import { simpleTitleBar } from "./toolbar-bar";
-import { WindowControls, windowEnvironment, windowPane } from "./window-stuff";
+import { win, WindowControls, windowEnvironment, windowPane } from "./window-stuff";
+
+import { Mat4, mat4 } from "./mat4";
 
 import { scaleLinear, ticks } from "d3";
 import { noop } from "./function-stuff";
@@ -51,20 +53,415 @@ type RectSize = [number, number]; // width, height
 
 // The plot needs to be able to sample data at granular resolution, 
 
-const makeData = () => {
-  let x = 0;
-  let y = Math.random();
-  const N = 1000;
-  const dataX = [x];
-  const data = [y];
-  for (let i = 0; i < N; i += 1) {
-    x += .002 * Math.random();
-    y += .05 * Math.random() - .025;
-    dataX.push(x);
-    data.push(y);
+function shaderProgram(gl: WebGLRenderingContext, vsSource: string, fsSource: string) {
+  const vertexShader = shader(gl, gl.VERTEX_SHADER, vsSource);
+  const fragmentShader = shader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+  // Create the shader program
+
+  const p = gl.createProgram();
+  if (!p || !vertexShader || !fragmentShader) {
+    console.error("Couldn't create shader program.");
+    return;
   }
-  return { x: dataX, y: data };
+  gl.attachShader(p, vertexShader);
+  gl.attachShader(p, fragmentShader);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    console.error("Couldn't link shader program: " + gl.getProgramInfoLog(p));
+    return;
+  }
+
+  return p;
 }
+
+//
+// creates a shader of the given type, uploads the source and
+// compiles it.
+//
+function shader(gl: WebGLRenderingContext, type: number, source: string) {
+  const s = gl.createShader(type);
+  if (!s) {
+    console.error("Couldn't create shader.");
+    return;
+  }
+  gl.shaderSource(s, source);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error("An error occurred compiling the shaders: " + gl.getShaderInfoLog(s));
+    gl.deleteShader(s);
+    return;
+  }
+  return s;
+}
+
+function initBuffers(gl: WebGLRenderingContext, m: Model): Buffers {
+  const position = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, position);
+  gl.bufferData(gl.ARRAY_BUFFER, m.vertices, gl.STATIC_DRAW);
+
+  const normal = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, normal);
+  gl.bufferData(gl.ARRAY_BUFFER, m.normals, gl.STATIC_DRAW);
+
+  // Now set up the colors for the faces. We'll use solid colors
+  // for each face.
+
+  // const faceColors = [
+  //   [1.0,  1.0,  1.0,  1.0],    // Front face: white
+  //   [1.0,  0.0,  0.0,  1.0],    // Back face: red
+  //   [0.0,  1.0,  0.0,  1.0],    // Top face: green
+  //   [0.0,  0.0,  1.0,  1.0],    // Bottom face: blue
+  //   [1.0,  1.0,  0.0,  1.0],    // Right face: yellow
+  //   [1.0,  0.0,  1.0,  1.0],    // Left face: purple
+  // ];
+
+  // // Convert the array of colors into a table for all the vertices.
+
+  // const colors: number[] = [];
+
+  // for (var j = 0; j < faceColors.length; ++j) {
+  //   const c = faceColors[j];
+
+  //   // Repeat each color four times for the four vertices of the face
+  //   colors.push(...c, ...c, ...c, ...c);
+  // }
+
+  // const colorBuffer = gl.createBuffer();
+  // gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+  // Build the element array buffer; this specifies the indices
+  // into the vertex arrays for each face's vertices.
+
+  const index = gl.createBuffer()!;
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.faces, gl.STATIC_DRAW);
+
+  return {
+    position,
+    normal,
+    index,
+  };
+}
+
+let cubeRotation = 0;
+
+function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, deltaTime: number, projectionMatrix: Mat4, numFaces: number) {
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+  gl.clearDepth(1.0);                 // Clear everything
+  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
+  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+
+  // Clear the canvas before we start drawing on it.
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // Create a perspective matrix, a special matrix that is
+  // used to simulate the distortion of perspective in a camera.
+  // Our field of view is 45 degrees, with a width/height
+  // ratio that matches the display size of the canvas
+  // and we only want to see objects between 0.1 units
+  // and 100 units away from the camera.
+
+  // Set the drawing position to the "identity" point, which is
+  // the center of the scene.
+  const modelViewMatrix = mat4.create();
+
+  // Now move the drawing position a bit to where we want to
+  // start drawing the square.
+
+  mat4.translate(modelViewMatrix,     // destination matrix
+                 modelViewMatrix,     // matrix to translate
+                 [-0.0, 0.0, -6.0]);  // amount to translate
+  mat4.rotate(modelViewMatrix,  // destination matrix
+              modelViewMatrix,  // matrix to rotate
+              cubeRotation,     // amount to rotate in radians
+              [0, 0, 1]);       // axis to rotate around (Z)
+  mat4.rotate(modelViewMatrix,  // destination matrix
+              modelViewMatrix,  // matrix to rotate
+              cubeRotation * .7,// amount to rotate in radians
+              [0, 1, 0]);       // axis to rotate around (X)
+
+  // Tell WebGL how to pull out the positions from the position
+  // buffer into the vertexPosition attribute
+  {
+    const numComponents = 3;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+    gl.vertexAttribPointer(
+        programInfo.attrib.vertexPosition,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+    gl.enableVertexAttribArray(
+        programInfo.attrib.vertexPosition);
+  }
+
+  // Tell WebGL how to pull out the colors from the color buffer
+  // into the vertexColor attribute.
+  {
+    const numComponents = 3;
+    const type = gl.FLOAT;
+    const normalize = true;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.normal);
+    gl.vertexAttribPointer(
+        programInfo.attrib.vertexNormal,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+    gl.enableVertexAttribArray(
+        programInfo.attrib.vertexNormal);
+  }
+
+  // Tell WebGL which indices to use to index the vertices
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index);
+
+  // Tell WebGL to use our program when drawing
+
+  gl.useProgram(programInfo.program);
+
+  // Set the shader uniforms
+
+  gl.uniformMatrix4fv(
+      programInfo.uniform.projectionMatrix,
+      false,
+      projectionMatrix);
+  gl.uniformMatrix4fv(
+      programInfo.uniform.modelViewMatrix,
+      false,
+      modelViewMatrix);
+
+  {
+    const vertexCount = 3 * numFaces;
+    const type = gl.UNSIGNED_INT;
+    const offset = 0;
+    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+  }
+
+  // Update the rotation for the next draw
+
+  cubeRotation += deltaTime;
+}
+
+interface ProgramInfo {
+  program: WebGLProgram;
+  attrib: {
+    vertexPosition: number;
+    vertexNormal: number;
+  };
+  uniform: {
+    projectionMatrix: WebGLUniformLocation;
+    modelViewMatrix: WebGLUniformLocation;
+  };
+}
+
+interface Buffers {
+  position: WebGLBuffer;
+  normal: WebGLBuffer;
+  index: WebGLBuffer;
+}
+
+interface GeometryModel {
+  vertices: Float32Array;
+  faces: Uint32Array;
+}
+
+interface Model extends GeometryModel {
+  normals: Float32Array;
+}
+
+function fetchModel(): Promise<Model> {
+  const vertices = fetch("/vertices.lf32").then(
+    r => r.arrayBuffer().then(b => new Float32Array(b)));
+  const faces = fetch("/faces.lu32").then(
+    r => r.arrayBuffer().then(b => new Uint32Array(b)));
+  return Promise.all([vertices, faces]).then(
+    ([vertices, faces]) => ({
+      vertices,
+      faces,
+      normals: makeNormals(vertices, faces),
+    }));
+}
+
+function makeNormals(vertices: Float32Array, faces: Uint32Array) {
+  // TODO: Interleave normals with vertices and freeze on the server.
+  const verticesLength = vertices.length;
+  const facesLength = faces.length;
+  const normals = new Float32Array(verticesLength);
+  for (let i = 0; i < facesLength; i += 3) {
+    const v0 = 3 * faces[i + 0];
+    const v1 = 3 * faces[i + 1];
+    const v2 = 3 * faces[i + 2];
+    const ax = vertices[v1 + 0] - vertices[v0 + 0],
+          ay = vertices[v1 + 1] - vertices[v0 + 1],
+          az = vertices[v1 + 2] - vertices[v0 + 2];
+    const bx = vertices[v2 + 0] - vertices[v0 + 0],
+          by = vertices[v2 + 1] - vertices[v0 + 1],
+          bz = vertices[v2 + 2] - vertices[v0 + 2];
+    const nx = ay * bz - az * by;
+    const ny = az * bx - ax * bz;
+    const nz = ax * by - ay * bx;
+    normals[v0+0] += nx;
+    normals[v0+1] += ny;
+    normals[v0+2] += nz;
+    normals[v1+0] += nx;
+    normals[v1+1] += ny;
+    normals[v1+2] += nz;
+    normals[v2+0] += nx;
+    normals[v2+1] += ny;
+    normals[v2+2] += nz;
+  }
+  for (let i = 0; i < verticesLength; i += 3) {
+    const x = normals[i + 0];
+    const y = normals[i + 1];
+    const z = normals[i + 2];
+    const d = Math.sqrt(x * x + y * y + z * z);
+    normals[i + 0] = x / d;
+    normals[i + 1] = y / d;
+    normals[i + 2] = z / d;
+  }
+  return normals;
+}
+
+const glApp = (model: Model) => SimpleWindow("WebGL", r => {
+  const numFaces = model.faces.length / 3;
+  const numVertices = model.vertices.length / 3;
+  console.log(numVertices);
+  console.log(numFaces);
+
+  const container = elem("div");
+  const canvas = elem("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  container.style.width = '100%';
+  container.style.height = '100%';
+  canvas.style.position = 'absolute';
+  canvas.style.top = '0';
+  canvas.style.left = '0';
+  container.appendChild(canvas);
+  const gl = canvas.getContext("webgl");
+
+  if (!gl) {
+    console.error("Could get WebGL context.");
+    return noop;
+  }
+  if (!gl.getExtension("OES_element_index_uint")) {
+    console.error("Missing required extension (OES_element_index_uint).");
+    return noop;
+  }
+  if (!gl.getExtension("WEBGL_depth_texture")) {
+    console.error("Missing required extension (WEBGL_depth_texture).");
+    return noop;
+  }
+
+  const fieldOfView = 45 * Math.PI / 180;   // in radians
+  const aspect = 1;
+  const zNear = 0.1;
+  const zFar = 100.0;
+  const projectionMatrix = mat4.create();
+  // note: glmatrix.js always has the first argument
+  // as the destination to receive the result.
+  mat4.perspective(projectionMatrix,
+    fieldOfView,
+    aspect,
+    zNear,
+    zFar);
+
+  const o = new ResizeObserver(entries => {
+    const entry = entries[entries.length - 1];
+    if (entry) {
+      const { width, height } = entry.contentRect;
+      const w = Math.floor(width);
+      const h = Math.floor(height);
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+
+      // note: glmatrix.js always has the first argument
+      // as the destination to receive the result.
+      mat4.perspective(projectionMatrix,
+        fieldOfView,
+        w / h,
+        zNear,
+        zFar);
+
+      gl.viewport(0, 0, w, h);
+      drawScene(gl, programInfo, buffers, 0, projectionMatrix, numFaces);
+    }
+  });
+  o.observe(container);
+
+  const vertexShaderSource = `
+    attribute vec4 aVertexPosition;
+    attribute vec3 aVertexNormal;
+    uniform mat4 uModelViewMatrix;
+    uniform mat4 uProjectionMatrix;
+    varying lowp vec4 vColor;
+    void main(void) {
+      vec4 pos = vec4(1e-4 * aVertexPosition.xyz, aVertexPosition.w);
+      gl_Position = uProjectionMatrix * uModelViewMatrix * pos;
+      float i = dot((uModelViewMatrix * vec4(aVertexNormal, 0)).xyz, vec3(0, 1, 0));
+      vColor = vec4(i, i, i, 1);
+    }
+  `;
+
+  const fragmentShaderSource = `
+    varying lowp vec4 vColor;
+    void main(void) {
+      gl_FragColor = vColor;
+    }
+  `;
+
+  const program = shaderProgram(gl, vertexShaderSource, fragmentShaderSource);
+  if (!program) return noop;
+
+  // Collect all the info needed to use the shader program.
+  // Look up which attributes our shader program is using
+  // for aVertexPosition, aVevrtexColor and also
+  // look up uniform locations.
+  const programInfo: ProgramInfo = {
+    program,
+    attrib: {
+      vertexPosition: gl.getAttribLocation(program, 'aVertexPosition'),
+      vertexNormal: gl.getAttribLocation(program, 'aVertexNormal'),
+    },
+    uniform: {
+      projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix')!,
+      modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix')!,
+    }
+  };
+
+  // Here's where we call the routine that builds all the
+  // objects we'll be drawing.
+  const buffers = initBuffers(gl, model);
+
+  let then = 0;
+
+  // Draw the scene repeatedly
+  function render(now: number) {
+    now *= 0.001;  // convert to seconds
+    const deltaTime = now - then;
+    then = now;
+
+    drawScene(gl!, programInfo, buffers, deltaTime, projectionMatrix, numFaces);
+
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+
+  return mount(container, r);
+});
 
 interface PlotOptions {
   requestRegion?: Handler<Limits>;
@@ -528,8 +925,10 @@ addWindow(Finder);
 addWindow(eApp);
 addWindow(qApp);
 
+fetchModel().then(m => addWindow(glApp(m)));
+
 (window as any).plot = function(ns: number[]) {
-  const [xlim, setXlim] = state([0, 1] as Limits);
+  const [xlim, setXlim] = state([0, 40] as Limits);
   const [ylim, setYlim] = state([0, 1] as Limits);
   const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
     title: conn.quantityName(ns[0] || 0).stream,
@@ -538,10 +937,32 @@ addWindow(qApp);
   addWindow(win);
 };
 
+const rateLimit = <T>(s: Stream<T>): Stream<T> => h => {
+  let mute = false;
+  let waiting = false;
+  let last: T;
+  return s(x => {
+    if (mute) {
+      waiting = true;
+      last = x;
+    } else {
+      h(x);
+      mute = true;
+      setTimeout(() => {
+        mute = false;
+        if (waiting) {
+          h(last);
+        }
+        waiting = false;
+      }, 30);
+    }
+  });
+};
+
 (window as any).plot2 = function(x: number, y: number) {
   const [xlim, setXlim] = state([0, 1] as Limits);
   const [ylim, setYlim] = state([0, 1] as Limits);
-  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [naiveDada2(x, y)], {
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [rateLimit(naiveDada2(x, y))], {
     title: map(zip([conn.quantityName(x).stream, conn.quantityName(y).stream]), ([x, y]) => `${y} vs. ${x}`),
   });
   const win = SimpleWindow("Custom", plot);
