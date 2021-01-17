@@ -1,13 +1,26 @@
 const EPSILON = 0.000001;
 const ARRAY_TYPE = Float32Array;
 export class Mat4 extends Float32Array {};
+export class Vec3 extends Float32Array {};
 
-interface Vec3 {
-  [0]: number;
-  [1]: number;
-  [2]: number;
-};
+export function makeVec3(x: number, y: number, z: number): Vec3 {
+  const out = new Float32Array(3);
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  return out;
+}
 
+export function addVec3(out: Vec3, a: Vec3, b: Vec3) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  return out;
+}
+
+export const vec3 = Object.assign(makeVec3, {
+  add: addVec3,
+});
 
 /**
  * Computes the cross product of two vec3's

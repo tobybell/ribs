@@ -16,7 +16,7 @@ import { Cleanup, cleanup } from "./temporary-stuff";
 import { simpleTitleBar } from "./toolbar-bar";
 import { win, WindowControls, windowEnvironment, windowPane } from "./window-stuff";
 
-import { Mat4, mat4 } from "./mat4";
+import { Mat4, mat4, vec3 } from "./mat4";
 
 import { scaleLinear, ticks } from "d3";
 import { noop } from "./function-stuff";
@@ -145,7 +145,7 @@ function initBuffers(gl: WebGLRenderingContext, m: Model): Buffers {
   };
 }
 
-function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, deltaTime: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number) {
+function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number) {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
@@ -171,7 +171,7 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
 
   mat4.translate(modelViewMatrix,     // destination matrix
                  modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -6.0]);  // amount to translate
+                 vec3(0, 0, -Math.exp(zoom)));  // amount to translate
   mat4.multiply(modelViewMatrix,
                 modelViewMatrix,
                 cOrientation);
@@ -388,7 +388,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
         zFar);
 
       gl.viewport(0, 0, w, h);
-      drawScene(gl, programInfo, buffers, 0, cOrientation, projectionMatrix, numFaces);
+      drawScene(gl, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces);
     }
   });
   o.observe(container);
@@ -437,15 +437,15 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   // objects we'll be drawing.
   const buffers = initBuffers(gl, model);
 
-  let then = 0;
+  let last = 0;
 
   // Draw the scene repeatedly
   function render(now: number) {
     now *= 0.001;  // convert to seconds
-    const deltaTime = now - then;
-    then = now;
+    const deltaTime = now - last;
+    last = now;
 
-    drawScene(gl!, programInfo, buffers, deltaTime, cOrientation, projectionMatrix, numFaces);
+    drawScene(gl!, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces);
 
     requestAnimationFrame(render);
   }
@@ -454,6 +454,8 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   // Temporary matrix used for updating the camera view.
   const tmp = mat4.create();
 
+  let zoom = 1;
+
   return cleanup(
     mount(container, r),
     domEvent("wheel", e => {
@@ -461,11 +463,11 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
       e.stopPropagation();
       const { deltaX, deltaY } = e;
       if (e.altKey || e.ctrlKey) {
-        console.log("You tryna Zoom?");
+        zoom += deltaY / 500;
       } else {
         mat4.identity(tmp);
-        mat4.rotate(tmp, tmp, -deltaX / 100, [0, 1, 0]);
-        mat4.rotate(tmp, tmp, -deltaY / 100, [1, 0, 0]);
+        mat4.rotate(tmp, tmp, -deltaX / 100, vec3(0, 1, 0));
+        mat4.rotate(tmp, tmp, -deltaY / 100, vec3(1, 0, 0));
         mat4.multiply(cOrientation, tmp, cOrientation);
       }
     })(canvas),
