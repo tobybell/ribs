@@ -94,35 +94,6 @@ function shader(gl: WebGLRenderingContext, type: number, source: string) {
   return s;
 }
 
-function drawScene(gl: WebGLRenderingContext, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, drawers: Set<Drawer>) {
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
-  gl.clearDepth(1.0);                 // Clear everything
-  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
-
-  // Clear the canvas before we start drawing on it.
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  gl.enable(gl.BLEND);
-	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-  // Set the drawing position to the "identity" point, which is
-  // the center of the scene.
-  const modelViewMatrix = mat4.create();
-
-  // Now move the drawing position a bit to where we want to
-  // start drawing the square.
-
-  mat4.translate(modelViewMatrix,     // destination matrix
-                 modelViewMatrix,     // matrix to translate
-                 vec3(0, 0, -Math.exp(zoom)));  // amount to translate
-  mat4.multiply(modelViewMatrix,
-                modelViewMatrix,
-                cOrientation);
-
-  drawers.forEach(f => f(modelViewMatrix));
-}
-
 interface GeometryModel {
   vertices: Float32Array;
   faces: Uint32Array;
@@ -264,7 +235,15 @@ function erosProgram(m: Model): GraphicsProgram {
 
       gl.drawElements(gl.TRIANGLES, 3 * numFaces, gl.UNSIGNED_INT, 0);
     };
-    return register(draw);
+    return cleanup(
+      register(draw),
+      () => {
+        gl.deleteBuffer(position);
+        gl.deleteBuffer(normal);
+        gl.deleteBuffer(index);
+        gl.deleteProgram(program);
+      },
+    );
   }
 }
 
@@ -295,7 +274,7 @@ function dotsProgram(color: Stream<Vec3>): GraphicsProgram {
       0, 2, 0,
       0, 0, 2,
     ]);
-    const centersBuffer = gl.createBuffer();
+    const centersBuffer = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, centersBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, centers, gl.STATIC_DRAW);
     const positionAttribute = gl.getAttribLocation(program, "center");
@@ -324,8 +303,21 @@ function dotsProgram(color: Stream<Vec3>): GraphicsProgram {
     return cleanup(
       color(x => lastColor = x),
       register(draw),
+      () => {
+        gl.deleteBuffer(centersBuffer);
+        gl.deleteProgram(program);
+      },
     );
   }
+}
+
+function runAnimation(f: FrameRequestCallback) {
+  const repeat: FrameRequestCallback = t => {
+    f(t);
+    afr = requestAnimationFrame(repeat);
+  };
+  let afr = requestAnimationFrame(repeat);
+  return () => cancelAnimationFrame(afr);
 }
 
 const glApp = (model: Model) => SimpleWindow("WebGL", r => {
@@ -354,18 +346,14 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     return noop;
   }
 
-  const fieldOfView = 45 * Math.PI / 180;   // in radians
-  const aspect = 1;
+  const fieldOfView = 45 * Math.PI / 180;
   const zNear = 0.1;
   const zFar = 100.0;
   const projectionMatrix = mat4.create();
-  // note: glmatrix.js always has the first argument
-  // as the destination to receive the result.
-  mat4.perspective(projectionMatrix,
-    fieldOfView,
-    aspect,
-    zNear,
-    zFar);
+  function resizeProjection(w: number, h: number) {
+    const aspect = w / h;
+    mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
+  }
 
   const cOrientation = mat4.create();
 
@@ -379,17 +367,9 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
       canvas.height = h;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-
-      // note: glmatrix.js always has the first argument
-      // as the destination to receive the result.
-      mat4.perspective(projectionMatrix,
-        fieldOfView,
-        w / h,
-        zNear,
-        zFar);
-
+      resizeProjection(w, h);
       gl.viewport(0, 0, w, h);
-      drawScene(gl, zoom, cOrientation, projectionMatrix, drawers);
+      render();
     }
   });
   o.observe(container);
@@ -408,19 +388,34 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   const TODO2 = ep(gl, register, projectionMatrix);
   const TODO = dp(gl, register, projectionMatrix);
 
-  let last = 0;
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+  gl.clearDepth(1.0);                 // Clear everything
+  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
+  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
+  // Set the drawing position to the "identity" point, which is
+  // the center of the scene.
+  const modelViewMatrix = mat4.create();
+  
   // Draw the scene repeatedly
-  function render(now: number) {
-    now *= 0.001;  // convert to seconds
-    const deltaTime = now - last;
-    last = now;
+  const render = () => {
+    // Clear the canvas before we start drawing on it.
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    drawScene(gl!, zoom, cOrientation, projectionMatrix, drawers);
+    // Now move the drawing position a bit to where we want to
+    // start drawing the square.
+    mat4.identity(modelViewMatrix);
+    mat4.translate(modelViewMatrix,     // destination matrix
+                  modelViewMatrix,     // matrix to translate
+                  vec3(0, 0, -Math.exp(zoom)));  // amount to translate
+    mat4.multiply(modelViewMatrix,
+                  modelViewMatrix,
+                  cOrientation);
 
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
+    drawers.forEach(f => f(modelViewMatrix));
+  };
 
   // Temporary matrix used for updating the camera view.
   const tmp = mat4.create();
@@ -428,6 +423,9 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   let zoom = 1;
 
   return cleanup(
+    runAnimation(_ => render()),
+    TODO,
+    TODO2,
     mount(container, r),
     domEvent("wheel", e => {
       e.preventDefault();
