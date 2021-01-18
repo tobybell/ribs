@@ -186,15 +186,18 @@ function makeNormals(vertices: Float32Array, faces: Uint32Array) {
 }
 
 type Drawer = (m: Mat4) => void;
-type GraphicsProgram = (g: WebGLRenderingContext, register: Temporary<Drawer>) => Cleanup;
+type GraphicsProgram = (
+  g: WebGLRenderingContext,
+  register: Temporary<Drawer>,
+  projectionMatrix: Mat4) => Cleanup;
 
-function erosProgram(m: Model, projectionMatrix: Mat4): GraphicsProgram {
+function erosProgram(m: Model): GraphicsProgram {
   const numFaces = m.faces.length / 3;
   const numVertices = m.vertices.length / 3;
   console.log(numVertices);
   console.log(numFaces);
 
-  return (gl, register) => {
+  return (gl, register, projectionMatrix) => {
     const program = shaderProgram(gl, `
       attribute vec4 aVertexPosition;
       attribute vec3 aVertexNormal;
@@ -265,8 +268,8 @@ function erosProgram(m: Model, projectionMatrix: Mat4): GraphicsProgram {
   }
 }
 
-function dotsProgram(color: Stream<Vec3>, projectionMatrix: Mat4): GraphicsProgram {
-  return (gl, register) => {
+function dotsProgram(color: Stream<Vec3>): GraphicsProgram {
+  return (gl, register, projectionMatrix) => {
     const program = shaderProgram(gl, `
       attribute vec4 center;
       uniform mat4 modelViewMatrix;
@@ -397,12 +400,13 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     return () => drawers.delete(x);
   };
 
-  const ep = erosProgram(model, projectionMatrix);
-  const TODO2 = ep(gl, register);
-
+  const ep = erosProgram(model);
+  
   const dc = either(rsquare(), vec3(1, 0, 0), vec3(0, 1, 0));
-  const dp = dotsProgram(dc, projectionMatrix);
-  const TODO = dp(gl, register);
+  const dp = dotsProgram(dc);
+
+  const TODO2 = ep(gl, register, projectionMatrix);
+  const TODO = dp(gl, register, projectionMatrix);
 
   let last = 0;
 
