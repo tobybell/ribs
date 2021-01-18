@@ -312,18 +312,9 @@ function dotsProgram(color: Stream<Vec3>, projectionMatrix: Mat4): GraphicsProgr
       gl.enableVertexAttribArray(positionAttribute);
     
       // Set the shader uniforms
-    
-      gl.uniformMatrix4fv(
-        projectionMatrixUniform,
-        false,
-        projectionMatrix);
-      gl.uniformMatrix4fv(
-        modelViewMatrixUniform,
-        false,
-        modelViewMatrix);
-      gl.uniform3fv(
-        colorUniform,
-        lastColor);
+      gl.uniformMatrix4fv(projectionMatrixUniform, false, projectionMatrix);
+      gl.uniformMatrix4fv(modelViewMatrixUniform, false, modelViewMatrix);
+      gl.uniform3fv(colorUniform, lastColor);
 
       gl.drawArrays(gl.POINTS, 0, 3);
     };
