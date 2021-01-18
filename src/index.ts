@@ -19,7 +19,7 @@ import { win, WindowControls, windowEnvironment, windowPane } from "./window-stu
 import { Mat4, mat4, vec3 } from "./mat4";
 
 import { scaleLinear, ticks } from "d3";
-import { noop } from "./function-stuff";
+import { noop, Thunk } from "./function-stuff";
 
 type Handler<T> = (x: T) => void;
 
@@ -145,7 +145,7 @@ function initBuffers(gl: WebGLRenderingContext, m: Model): Buffers {
   };
 }
 
-function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number) {
+function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number, dotDraw: (m: Mat4) => void) {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
@@ -154,6 +154,10 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
   // Clear the canvas before we start drawing on it.
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
 
   // Create a perspective matrix, a special matrix that is
   // used to simulate the distortion of perspective in a camera.
@@ -240,6 +244,8 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
     const offset = 0;
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
   }
+
+  dotDraw(modelViewMatrix);
 }
 
 interface ProgramInfo {
@@ -388,7 +394,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
         zFar);
 
       gl.viewport(0, 0, w, h);
-      drawScene(gl, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces);
+      drawScene(gl, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, dotDraw);
     }
   });
   o.observe(container);
@@ -400,7 +406,10 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     uniform mat4 uProjectionMatrix;
     varying lowp vec4 vColor;
     void main(void) {
-      vec4 pos = vec4(1e-4 * aVertexPosition.xyz, aVertexPosition.w);
+
+      // Scale down by 1e-4.
+      vec4 pos = vec4(aVertexPosition.xyz, 1e4);
+
       gl_Position = uProjectionMatrix * uModelViewMatrix * pos;
       float i = dot((uModelViewMatrix * vec4(aVertexNormal, 0)).xyz, vec3(0, 1, 0));
       vColor = vec4(i, i, i, 1);
@@ -416,6 +425,87 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
 
   const program = shaderProgram(gl, vertexShaderSource, fragmentShaderSource);
   if (!program) return noop;
+
+  const dotProgram = shaderProgram(gl, `
+    attribute vec4 center;
+    uniform mat4 modelViewMatrix;
+    uniform mat4 projectionMatrix;
+    void main(void) {
+      gl_Position = projectionMatrix * modelViewMatrix * center;
+      gl_PointSize = 10.;
+    }
+  `, `
+    uniform lowp vec4 color;
+    void main(void) {
+      lowp vec2 pos = gl_PointCoord - vec2(0.5, 0.5);
+      lowp float dist_squared = dot(pos, pos);
+      lowp float alpha;
+
+      if (dist_squared < 0.25) {
+        alpha = 1.0;
+      } else {
+        alpha = 0.0;
+      }
+
+      gl_FragColor = vec4(alpha, alpha, alpha, alpha);
+    }
+  `)!;
+  const dotCenters = new Float32Array([
+    2, 0, 0,
+    0, 2, 0,
+    0, 0, 2,
+  ]);
+  const dotBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, dotCenters, gl.STATIC_DRAW);
+  const dotPositionAttribute = gl.getAttribLocation(dotProgram, "center");
+  const dotProjectionMatrixUniform = gl.getUniformLocation(dotProgram, "projectionMatrix");
+  const dotModelViewMatrixUniform = gl.getUniformLocation(dotProgram, "modelViewMatrix");
+  const dotColorUniform = gl.getUniformLocation(dotProgram, "color");
+  const dotColor = new Float32Array([1, 0, 0, 1]);
+  const dotDraw = (modelViewMatrix: Mat4) => {
+    // Tell WebGL to use our program when drawing
+    gl.useProgram(dotProgram);
+
+    // Tell WebGL how to pull out the positions from the position
+    // buffer into the vertexPosition attribute
+    {
+      const numComponents = 3;
+      const type = gl.FLOAT;
+      const normalize = false;
+      const stride = 0;
+      const offset = 0;
+      gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
+      gl.vertexAttribPointer(
+        dotPositionAttribute,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+      gl.enableVertexAttribArray(dotPositionAttribute);
+    }
+  
+    // Set the shader uniforms
+  
+    gl.uniformMatrix4fv(
+      dotProjectionMatrixUniform,
+      false,
+      projectionMatrix);
+    gl.uniformMatrix4fv(
+      dotModelViewMatrixUniform,
+      false,
+      modelViewMatrix);
+    gl.uniform4fv(
+      dotColorUniform,
+      dotColor);
+
+    {
+      const vertexCount = 3;
+      const offset = 0;
+      gl.drawArrays(gl.POINTS, offset, vertexCount);
+    }
+  };
 
   // Collect all the info needed to use the shader program.
   // Look up which attributes our shader program is using
@@ -445,7 +535,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     const deltaTime = now - last;
     last = now;
 
-    drawScene(gl!, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces);
+    drawScene(gl!, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, dotDraw);
 
     requestAnimationFrame(render);
   }
