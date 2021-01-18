@@ -11,12 +11,12 @@ import { div } from "./div";
 import { elem } from "./elem";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
-import { join, just, map, state, Stream, zip } from "./stream-stuff";
-import { Cleanup, cleanup } from "./temporary-stuff";
+import { either, join, just, map, rsquare, state, Stream, zip } from "./stream-stuff";
+import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
 import { simpleTitleBar } from "./toolbar-bar";
 import { win, WindowControls, windowEnvironment, windowPane } from "./window-stuff";
 
-import { Mat4, mat4, vec3 } from "./mat4";
+import { Mat4, mat4, Vec3, vec3 } from "./mat4";
 
 import { scaleLinear, ticks } from "d3";
 import { noop, Thunk } from "./function-stuff";
@@ -145,7 +145,7 @@ function initBuffers(gl: WebGLRenderingContext, m: Model): Buffers {
   };
 }
 
-function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number, dotDraw: (m: Mat4) => void) {
+function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers: Buffers, zoom: number, cOrientation: Mat4, projectionMatrix: Mat4, numFaces: number, drawers: Set<Drawer>) {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
@@ -245,7 +245,7 @@ function drawScene(gl: WebGLRenderingContext, programInfo: ProgramInfo, buffers:
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
   }
 
-  dotDraw(modelViewMatrix);
+  drawers.forEach(f => f(modelViewMatrix));
 }
 
 interface ProgramInfo {
@@ -328,6 +328,78 @@ function makeNormals(vertices: Float32Array, faces: Uint32Array) {
   return normals;
 }
 
+type Drawer = (m: Mat4) => void;
+type GraphicsProgram = (g: WebGLRenderingContext, register: Temporary<Drawer>) => Cleanup;
+
+function dotsProgram(color: Stream<Vec3>, projectionMatrix: Mat4): GraphicsProgram {
+  return (gl, register) => {
+    const program = shaderProgram(gl, `
+      attribute vec4 center;
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+      void main(void) {
+        gl_Position = projectionMatrix * modelViewMatrix * center;
+        gl_PointSize = 10.;
+      }
+    `, `
+      uniform lowp vec3 color;
+      void main(void) {
+        lowp vec2 pos = gl_PointCoord - vec2(0.5, 0.5);
+        lowp float dist_squared = dot(pos, pos);
+        lowp float alpha;
+        if (dist_squared >= 0.25) {
+          discard;
+        }
+        gl_FragColor = vec4(color, 1);
+      }
+    `)!;
+    const centers = new Float32Array([
+      2, 0, 0,
+      0, 2, 0,
+      0, 0, 2,
+    ]);
+    const centersBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, centersBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, centers, gl.STATIC_DRAW);
+    const positionAttribute = gl.getAttribLocation(program, "center");
+    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
+    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
+    const colorUniform = gl.getUniformLocation(program, "color");
+    let lastColor: Float32Array;
+    
+    const draw = (modelViewMatrix: Mat4) => {
+      // Tell WebGL to use our program when drawing
+      gl.useProgram(program);
+  
+      // Tell WebGL how to pull out the positions from the position
+      // buffer into the vertexPosition attribute
+      gl.bindBuffer(gl.ARRAY_BUFFER, centersBuffer);
+      gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(positionAttribute);
+    
+      // Set the shader uniforms
+    
+      gl.uniformMatrix4fv(
+        projectionMatrixUniform,
+        false,
+        projectionMatrix);
+      gl.uniformMatrix4fv(
+        modelViewMatrixUniform,
+        false,
+        modelViewMatrix);
+      gl.uniform3fv(
+        colorUniform,
+        lastColor);
+
+      gl.drawArrays(gl.POINTS, 0, 3);
+    };
+    return cleanup(
+      color(x => lastColor = x),
+      register(draw),
+    );
+  }
+}
+
 const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   const numFaces = model.faces.length / 3;
   const numVertices = model.vertices.length / 3;
@@ -394,7 +466,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
         zFar);
 
       gl.viewport(0, 0, w, h);
-      drawScene(gl, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, dotDraw);
+      drawScene(gl, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, drawers);
     }
   });
   o.observe(container);
@@ -426,86 +498,15 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   const program = shaderProgram(gl, vertexShaderSource, fragmentShaderSource);
   if (!program) return noop;
 
-  const dotProgram = shaderProgram(gl, `
-    attribute vec4 center;
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-    void main(void) {
-      gl_Position = projectionMatrix * modelViewMatrix * center;
-      gl_PointSize = 10.;
-    }
-  `, `
-    uniform lowp vec4 color;
-    void main(void) {
-      lowp vec2 pos = gl_PointCoord - vec2(0.5, 0.5);
-      lowp float dist_squared = dot(pos, pos);
-      lowp float alpha;
-
-      if (dist_squared < 0.25) {
-        alpha = 1.0;
-      } else {
-        alpha = 0.0;
-      }
-
-      gl_FragColor = vec4(alpha, alpha, alpha, alpha);
-    }
-  `)!;
-  const dotCenters = new Float32Array([
-    2, 0, 0,
-    0, 2, 0,
-    0, 0, 2,
-  ]);
-  const dotBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, dotCenters, gl.STATIC_DRAW);
-  const dotPositionAttribute = gl.getAttribLocation(dotProgram, "center");
-  const dotProjectionMatrixUniform = gl.getUniformLocation(dotProgram, "projectionMatrix");
-  const dotModelViewMatrixUniform = gl.getUniformLocation(dotProgram, "modelViewMatrix");
-  const dotColorUniform = gl.getUniformLocation(dotProgram, "color");
-  const dotColor = new Float32Array([1, 0, 0, 1]);
-  const dotDraw = (modelViewMatrix: Mat4) => {
-    // Tell WebGL to use our program when drawing
-    gl.useProgram(dotProgram);
-
-    // Tell WebGL how to pull out the positions from the position
-    // buffer into the vertexPosition attribute
-    {
-      const numComponents = 3;
-      const type = gl.FLOAT;
-      const normalize = false;
-      const stride = 0;
-      const offset = 0;
-      gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
-      gl.vertexAttribPointer(
-        dotPositionAttribute,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-      gl.enableVertexAttribArray(dotPositionAttribute);
-    }
-  
-    // Set the shader uniforms
-  
-    gl.uniformMatrix4fv(
-      dotProjectionMatrixUniform,
-      false,
-      projectionMatrix);
-    gl.uniformMatrix4fv(
-      dotModelViewMatrixUniform,
-      false,
-      modelViewMatrix);
-    gl.uniform4fv(
-      dotColorUniform,
-      dotColor);
-
-    {
-      const vertexCount = 3;
-      const offset = 0;
-      gl.drawArrays(gl.POINTS, offset, vertexCount);
-    }
+  const drawers = new Set<Drawer>();
+  const register = (x: Drawer) => {
+    drawers.add(x);
+    return () => drawers.delete(x);
   };
+
+  const dc = either(rsquare(), vec3(1, 0, 0), vec3(0, 1, 0));
+  const dp = dotsProgram(dc, projectionMatrix);
+  const TODO = dp(gl, register);
 
   // Collect all the info needed to use the shader program.
   // Look up which attributes our shader program is using
@@ -535,7 +536,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     const deltaTime = now - last;
     last = now;
 
-    drawScene(gl!, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, dotDraw);
+    drawScene(gl!, programInfo, buffers, zoom, cOrientation, projectionMatrix, numFaces, drawers);
 
     requestAnimationFrame(render);
   }
