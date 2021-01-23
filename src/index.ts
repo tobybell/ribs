@@ -10,7 +10,7 @@ import { desktop } from "./desktop";
 import { div } from "./div";
 import { elem } from "./elem";
 import { noop } from "./function-stuff";
-import { Mat4, mat4, Vec3, vec3 } from "./mat4";
+import { Mat4, mat4, Vec2, Vec3, vec3 } from "./mat4";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
 import { either, join, just, map, rsquare, state, Stream, zip } from "./stream-stuff";
@@ -160,7 +160,8 @@ type Drawer = (m: Mat4) => void;
 type GraphicsProgram = (
   g: WebGLRenderingContext,
   register: Temporary<Drawer>,
-  projectionMatrix: Mat4) => Cleanup;
+  projectionMatrix: Mat4,
+  resolution: Vec2) => Cleanup;
 
 function erosProgram(m: Model): GraphicsProgram {
   const numFaces = m.faces.length / 3;
@@ -311,6 +312,187 @@ function dotsProgram(color: Stream<Vec3>): GraphicsProgram {
   }
 }
 
+/** Draws three coordinate axes. */
+function axesProgram(): GraphicsProgram {
+  return (gl, register, projectionMatrix, resolution) => {
+    const program = shaderProgram(gl, `
+      attribute vec3 position;
+      attribute vec3 dir;
+      attribute vec3 color;
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+      uniform vec2 resolution;
+      varying lowp vec3 vColor;
+      void main(void) {
+        float aspect = resolution.x / resolution.y;
+        mat4 m = projectionMatrix * modelViewMatrix;
+        vec4 world0 = m * vec4(100. * position, 1.);
+        vec4 world1 = m * vec4(100. * position + dir, 1.);
+        vec2 clip0 = world0.xy / abs(world0.w);
+        clip0.x *= aspect;
+        vec2 clip1 = world1.xy / abs(world1.w);
+        clip1.x *= aspect;
+        vec2 tangent = normalize(clip1 - clip0);
+        vec2 normal = vec2(-tangent.y, tangent.x);
+        normal.x /= aspect;
+        gl_Position = vec4(world0.xy + 2. * world0.w * normal / resolution.y, world0.zw);
+        vColor = color;
+      }
+    `, `
+      varying lowp vec3 vColor;
+      void main(void) {
+        gl_FragColor = vec4(vColor, 0.5);
+      }
+    `)!;
+    const axes = new Float32Array([
+      // Position, color
+      // 0, 0, 0, 1, 0, 0,
+      // 1, 0, 0, 0, 1, 0,
+      // 0, 1, 0, 0, 0, 1,
+
+      0, 0, 0, 1, 0, 0, 1, 0, 0,
+      1, 0, 0, 1, 0, 0, -1, 0, 0,
+      1, 0, 0, 1, 0, 0, 1, 0, 0,
+      0, 0, 0, 1, 0, 0, 1, 0, 0,
+      0, 0, 0, 1, 0, 0, -1, 0, 0,
+      1, 0, 0, 1, 0, 0, -1, 0, 0,
+
+      0, 0, 0, 0, 1, 0, 0, 1, 0,
+      0, 1, 0, 0, 1, 0, 0, -1, 0,
+      0, 1, 0, 0, 1, 0, 0, 1, 0,
+      0, 0, 0, 0, 1, 0, 0, 1, 0,
+      0, 0, 0, 0, 1, 0, 0, -1, 0,
+      0, 1, 0, 0, 1, 0, 0, -1, 0,
+
+      0, 0, 0, 0, 0, 1, 0, 0, 1,
+      0, 0, 1, 0, 0, 1, 0, 0, -1,
+      0, 0, 1, 0, 0, 1, 0, 0, 1,
+      0, 0, 0, 0, 0, 1, 0, 0, 1,
+      0, 0, 0, 0, 0, 1, 0, 0, -1,
+      0, 0, 1, 0, 0, 1, 0, 0, -1,
+    ]);
+    const geoBuffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, geoBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, axes, gl.STATIC_DRAW);
+    const positionAttribute = gl.getAttribLocation(program, "position");
+    const dirAttribute = gl.getAttribLocation(program, "dir");
+    const colorAttribute = gl.getAttribLocation(program, "color");
+    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
+    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
+    const resolutionUniform = gl.getUniformLocation(program, "resolution");
+    const draw = (modelViewMatrix: Mat4) => {
+      // Tell WebGL to use our program when drawing
+      gl.useProgram(program);
+  
+      // Tell WebGL how to pull out the positions from the position
+      // buffer into the vertexPosition attribute
+      gl.bindBuffer(gl.ARRAY_BUFFER, geoBuffer);
+      gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, 36, 0);
+      gl.enableVertexAttribArray(positionAttribute);
+      gl.vertexAttribPointer(colorAttribute, 3, gl.FLOAT, false, 36, 12);
+      gl.enableVertexAttribArray(colorAttribute);
+      gl.vertexAttribPointer(dirAttribute, 3, gl.FLOAT, false, 36, 24);
+      gl.enableVertexAttribArray(dirAttribute);
+    
+      // Set the shader uniforms
+      gl.uniformMatrix4fv(projectionMatrixUniform, false, projectionMatrix);
+      gl.uniformMatrix4fv(modelViewMatrixUniform, false, modelViewMatrix);
+      gl.uniform2fv(resolutionUniform, resolution);
+      // gl.uniform3fv(colorUniform, lastColor);
+
+      gl.drawArrays(gl.TRIANGLES, 0, axes.length / 9);
+    };
+    return cleanup(
+      register(draw),
+      () => {
+        gl.deleteBuffer(geoBuffer);
+        gl.deleteProgram(program);
+      },
+    );
+  }
+}
+
+function orbitProgram(): GraphicsProgram {
+  const dataPromise = fetch("/orbit-cart.lf32").then(
+    r => r.arrayBuffer().then(b => new Float32Array(b)));
+  let data: Float32Array | undefined;
+  let numVertices = 0;
+  dataPromise.then(x => {
+    data = x;
+    numVertices = data.length / 4;
+  });
+  return (gl, register, projectionMatrix) => {
+    const program = shaderProgram(gl, `
+      attribute highp float aTime;
+      attribute vec4 position;
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+      varying highp float vTime;
+      void main(void) {
+        // Scale down by 1e-4.
+        vec4 pos = vec4(position.xyz, 1e4);
+        gl_Position = projectionMatrix * modelViewMatrix * pos;
+        vTime = aTime;
+      }
+    `, `
+      uniform lowp vec3 color;
+      uniform highp float time;
+      varying highp float vTime;
+      void main(void) {
+        highp float t = (vTime - (time - 36000.)) / 36000.;
+        if (t > 0. && t <= 1.) {
+          gl_FragColor = vec4(color, t);
+        } else {
+          discard;
+        }
+      }
+    `)!;
+    const dataBuffer = gl.createBuffer()!;
+    dataPromise.then(x => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, dataBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, x, gl.STATIC_DRAW);
+    });
+    const timeAttribute = gl.getAttribLocation(program, "aTime");
+    const positionAttribute = gl.getAttribLocation(program, "position");
+    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
+    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
+    const colorUniform = gl.getUniformLocation(program, "color");
+    const timeUniform = gl.getUniformLocation(program, "time");
+    const color = vec3(0, 1, 1);
+    
+    const draw = (modelViewMatrix: Mat4) => {
+      if (!data) return;
+
+      // Tell WebGL to use our program when drawing
+      gl.useProgram(program);
+      gl.lineWidth(1);
+  
+      // Tell WebGL how to pull out the positions from the position
+      // buffer into the vertexPosition attribute
+      gl.bindBuffer(gl.ARRAY_BUFFER, dataBuffer);
+      gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, 16, 4);
+      gl.enableVertexAttribArray(positionAttribute);
+      gl.vertexAttribPointer(timeAttribute, 1, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(timeAttribute);
+    
+      // Set the shader uniforms
+      gl.uniformMatrix4fv(projectionMatrixUniform, false, projectionMatrix);
+      gl.uniformMatrix4fv(modelViewMatrixUniform, false, modelViewMatrix);
+      gl.uniform3fv(colorUniform, color);
+      gl.uniform1f(timeUniform, performance.now() % 1e7);
+
+      gl.drawArrays(gl.LINE_STRIP, 0, numVertices);
+    };
+    return cleanup(
+      register(draw),
+      () => {
+        gl.deleteBuffer(dataBuffer);
+        gl.deleteProgram(program);
+      },
+    );
+  }
+}
+
 function runAnimation(f: FrameRequestCallback) {
   const repeat: FrameRequestCallback = t => {
     f(t);
@@ -355,6 +537,8 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
   }
 
+  const resolution = new Float32Array([100, 100]);
+
   const cOrientation = mat4.create();
 
   const o = new ResizeObserver(entries => {
@@ -363,6 +547,8 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
       const { width, height } = entry.contentRect;
       const w = Math.floor(width);
       const h = Math.floor(height);
+      resolution[0] = w;
+      resolution[1] = h;
       canvas.width = w;
       canvas.height = h;
       canvas.style.width = `${w}px`;
@@ -383,10 +569,6 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   const ep = erosProgram(model);
   
   const dc = either(rsquare(), vec3(1, 0, 0), vec3(0, 1, 0));
-  const dp = dotsProgram(dc);
-
-  const TODO2 = ep(gl, register, projectionMatrix);
-  const TODO = dp(gl, register, projectionMatrix);
 
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
@@ -424,8 +606,10 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
 
   return cleanup(
     runAnimation(_ => render()),
-    TODO,
-    TODO2,
+    dotsProgram(dc)(gl, register, projectionMatrix, resolution),
+    ep(gl, register, projectionMatrix, resolution),
+    axesProgram()(gl, register, projectionMatrix, resolution),
+    orbitProgram()(gl, register, projectionMatrix, resolution),
     mount(container, r),
     domEvent("wheel", e => {
       e.preventDefault();
@@ -459,8 +643,8 @@ const Plot2D = (
     title = just("Plot"),
   }: PlotOptions = {},
 ): Component => {
-  const xLabel = just('Time [d]');
-  const yLabel = just('Price [$]');
+  const xLabel = just('Time [s]');
+  const yLabel = just('Position');
 
   const tickLength = 5;
   const axisPad = 4;
@@ -908,9 +1092,9 @@ addWindow(qApp);
 fetchModel().then(m => addWindow(glApp(m)));
 
 (window as any).plot = function(ns: number[]) {
-  const [xlim, setXlim] = state([0, 40] as Limits);
-  const [ylim, setYlim] = state([0, 1] as Limits);
-  const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
+  const [xlim, setXlim] = state([0, 10] as Limits);
+  const [ylim, setYlim] = state([-2, 2] as Limits);
+  const plot = Plot2D(xlim, ylim, noop, setYlim, ns.map(dada), {
     title: conn.quantityName(ns[0] || 0).stream,
   });
   const win = SimpleWindow("Custom", plot);

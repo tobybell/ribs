@@ -2,6 +2,7 @@ const EPSILON = 0.000001;
 const ARRAY_TYPE = Float32Array;
 export class Mat4 extends Float32Array {};
 export class Vec3 extends Float32Array {};
+export class Vec2 extends Float32Array {};
 
 export function makeVec3(x: number, y: number, z: number): Vec3 {
   const out = new Float32Array(3);
