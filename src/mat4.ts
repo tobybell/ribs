@@ -3,6 +3,7 @@ const ARRAY_TYPE = Float32Array;
 export class Mat4 extends Float32Array {};
 export class Vec3 extends Float32Array {};
 export class Vec2 extends Float32Array {};
+export class Quat extends Float32Array {};
 
 export function makeVec3(x: number, y: number, z: number): Vec3 {
   const out = new Float32Array(3);
@@ -21,6 +22,77 @@ export function addVec3(out: Vec3, a: Vec3, b: Vec3) {
 
 export const vec3 = Object.assign(makeVec3, {
   add: addVec3,
+});
+
+export function makeQuat(w: number, x: number, y: number, z: number): Quat {
+  const out = new Float32Array(4);
+  out[0] = w;
+  out[1] = x;
+  out[2] = y;
+  out[3] = z;
+  return out;
+}
+
+export function addQuat(out: Quat, a: Quat, b: Quat) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  return out;
+}
+
+export function subQuat(out: Quat, a: Quat, b: Quat) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  return out;
+}
+
+export function mulQuat(out: Quat, a: Quat, b: Quat) {
+  const aw = a[0],
+        ax = a[1],
+        ay = a[2],
+        az = a[3];
+  const bw = b[0],
+        bx = b[1],
+        by = b[2],
+        bz = b[3];
+  out[0] = aw * bw - ax * bx - ay * by - az * bz;
+  out[1] = aw * bx + ax * bw + ay * bz - az * by;
+  out[2] = aw * by - ax * bz + ay * bw + az * bx;
+  out[3] = aw * bz + ax * by - ay * bx + az * bw;
+  return out;
+}
+
+export function invQuat(out: Quat, a: Quat) {
+  out[0] = a[0];
+  out[1] = -a[1];
+  out[2] = -a[2];
+  out[3] = -a[3];
+  return out;
+}
+
+export function expQuat(out: Quat, a: Vec3) {
+  const ax = a[0],
+        ay = a[1],
+        az = a[2];
+  const t = Math.sqrt(ax * ax + ay * ay + az * az);
+  const c = Math.cos(t / 2);
+  const s = Math.sin(t / 2);
+  out[0] = c;
+  out[1] = s * ax / t;
+  out[2] = s * ay / t;
+  out[3] = s * az / t;
+  return out;
+}
+
+export const quat = Object.assign(makeQuat, {
+  add: addQuat,
+  sub: subQuat,
+  mul: mulQuat,
+  inv: invQuat,
+  exp: expQuat,
 });
 
 /**

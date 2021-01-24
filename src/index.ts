@@ -10,7 +10,7 @@ import { desktop } from "./desktop";
 import { div } from "./div";
 import { elem } from "./elem";
 import { noop } from "./function-stuff";
-import { Mat4, mat4, Vec2, Vec3, vec3 } from "./mat4";
+import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from "./mat4";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
 import { either, join, just, map, rsquare, state, Stream, zip } from "./stream-stuff";
@@ -173,17 +173,31 @@ function erosProgram(m: Model): GraphicsProgram {
     const program = shaderProgram(gl, `
       attribute vec4 aVertexPosition;
       attribute vec3 aVertexNormal;
+      uniform vec4 uOrientation;
       uniform mat4 uModelViewMatrix;
       uniform mat4 uProjectionMatrix;
       varying lowp vec4 vColor;
       void main(void) {
-    
         // Scale down by 1e-4.
         vec4 pos = vec4(aVertexPosition.xyz, 1e4);
-    
+
+        // Orient.
+        vec4 q = vec4(uOrientation.yzw, uOrientation.x);
+        // vec4 q = uOrientation;
+
+        vec4 i = vec4(
+          +pos.x * q.w - pos.y * q.z + pos.z * q.y,
+          +pos.x * q.z + pos.y * q.w - pos.z * q.x,
+          -pos.x * q.y + pos.y * q.x + pos.z * q.w,
+          +pos.x * q.x + pos.y * q.y + pos.z * q.z);
+        pos = vec4(
+          q.w * i.x + q.x * i.w + q.y * i.z - q.z * i.y,
+          q.w * i.y - q.x * i.z + q.y * i.w + q.z * i.x,
+          q.w * i.z + q.x * i.y - q.y * i.x + q.z * i.w, pos.w);
+
         gl_Position = uProjectionMatrix * uModelViewMatrix * pos;
-        float i = dot((uModelViewMatrix * vec4(aVertexNormal, 0)).xyz, vec3(0, 1, 0));
-        vColor = vec4(i, i, i, 1);
+        float alp = dot((uModelViewMatrix * vec4(aVertexNormal, 0)).xyz, vec3(0, 1, 0));
+        vColor = vec4(alp, alp, alp, 1);
       }
     `, `
       varying lowp vec4 vColor;
@@ -198,6 +212,7 @@ function erosProgram(m: Model): GraphicsProgram {
     // look up uniform locations.
     const positionAttribute = gl.getAttribLocation(program, "aVertexPosition");
     const normalAttribute = gl.getAttribLocation(program, "aVertexNormal");
+    const orientationUniform = gl.getUniformLocation(program, "uOrientation")!;
     const projectionMatrixUniform = gl.getUniformLocation(program, "uProjectionMatrix")!;
     const modelViewMatrixUniform = gl.getUniformLocation(program, "uModelViewMatrix")!;
 
@@ -212,6 +227,8 @@ function erosProgram(m: Model): GraphicsProgram {
     const index = gl.createBuffer()!;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.faces, gl.STATIC_DRAW);
+
+    const orientation = quat(1, 0, 0, 0);
 
     const draw = (modelViewMatrix: Mat4) => {
       // Tell WebGL to use our program when drawing
@@ -230,7 +247,10 @@ function erosProgram(m: Model): GraphicsProgram {
       // Tell WebGL which indices to use to index the vertices
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
 
+      quat.exp(orientation, vec3(0, 0, performance.now() / 50000));
+
       // Set the shader uniforms
+      gl.uniform4fv(orientationUniform, orientation);
       gl.uniformMatrix4fv(projectionMatrixUniform, false, projectionMatrix);
       gl.uniformMatrix4fv(modelViewMatrixUniform, false, modelViewMatrix);
 
@@ -341,7 +361,7 @@ function axesProgram(): GraphicsProgram {
     `, `
       varying lowp vec3 vColor;
       void main(void) {
-        gl_FragColor = vec4(vColor, 0.5);
+        gl_FragColor = vec4(vColor, 0.3);
       }
     `)!;
     const axes = new Float32Array([
@@ -590,8 +610,8 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     // start drawing the square.
     mat4.identity(modelViewMatrix);
     mat4.translate(modelViewMatrix,     // destination matrix
-                  modelViewMatrix,     // matrix to translate
-                  vec3(0, 0, -Math.exp(zoom)));  // amount to translate
+                   modelViewMatrix,     // matrix to translate
+                   vec3(0, 0, -Math.exp(zoom)));  // amount to translate
     mat4.multiply(modelViewMatrix,
                   modelViewMatrix,
                   cOrientation);
@@ -606,7 +626,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
 
   return cleanup(
     runAnimation(_ => render()),
-    dotsProgram(dc)(gl, register, projectionMatrix, resolution),
+    // dotsProgram(dc)(gl, register, projectionMatrix, resolution),
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
     orbitProgram()(gl, register, projectionMatrix, resolution),
