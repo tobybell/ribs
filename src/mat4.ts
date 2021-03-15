@@ -1,9 +1,11 @@
 const EPSILON = 0.000001;
 const ARRAY_TYPE = Float32Array;
 export class Mat4 extends Float32Array {};
-export class Vec3 extends Float32Array {};
 export class Vec2 extends Float32Array {};
 export class Quat extends Float32Array {};
+export class Mat2 extends Float32Array {};
+
+export class Vec3 extends Float32Array {};
 
 export function makeVec3(x: number, y: number, z: number): Vec3 {
   const out = new Float32Array(3);
@@ -22,6 +24,28 @@ export function addVec3(out: Vec3, a: Vec3, b: Vec3) {
 
 export const vec3 = Object.assign(makeVec3, {
   add: addVec3,
+});
+
+export class Vec4 extends Float32Array {};
+
+export function makeVec4(x: number, y: number, z: number, w: number): Vec3 {
+  const out = new Float32Array(4);
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
+  return out;
+}
+
+export function addVec4(out: Vec4, a: Vec4, b: Vec4) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  return out;
+}
+
+export const vec4 = Object.assign(makeVec4, {
+  add: addVec4,
 });
 
 export function makeQuat(w: number, x: number, y: number, z: number): Quat {
@@ -93,6 +117,26 @@ export const quat = Object.assign(makeQuat, {
   mul: mulQuat,
   inv: invQuat,
   exp: expQuat,
+});
+
+function makeMat2(x00: number, x01: number, x10: number, x11: number) {
+  const out = new Float32Array(4);
+  out[0] = x00;
+  out[1] = x01;
+  out[2] = x10;
+  out[3] = x11;
+  return out;
+}
+
+function addMat2(out: Mat2, a: Mat2, b: Mat2) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+}
+
+export const mat2 = Object.assign(makeMat2, {
+  add: addMat2,
 });
 
 /**

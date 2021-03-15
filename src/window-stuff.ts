@@ -41,7 +41,7 @@ export function windowPane(content?: ElementThing[], effects?: Effect[]) {
   }, [...(content || []), borderOverlay], effects);
 }
 
-type Window = (c: WindowControls) => Component;
+export type Window = (c: WindowControls) => Component;
 
 export const win = ident<Window>();
 
@@ -56,7 +56,7 @@ interface WindowRecord {
 }
 
 export type WindowStream = Stream<WindowRecord>;
-type WindowAdder = Handler<Window>;
+type WindowAdder = (w: Window, f?: Partial<Frame>) => void;
 
 /** Create a pull stream that counts up from 0. */
 const counter = () => {
@@ -192,9 +192,10 @@ export const windowEnvironment = (): [WindowStream, WindowAdder] => {
     return [frame, {top, bottom, left, right, topLeft, topRight, bottomLeft, bottomRight, middle}];
   }
 
-  const addWindow = (w: Window) => {
+  const addWindow = (w: Window, f: Partial<Frame> = {}) => {
     const k = nextId();
-    const [frame, handles] = useFrame({ x: 100, y: 100, width: 500, height: 400 });
+    const { x = 100, y = 100, width = 500, height = 400 } = f;
+    const [frame, handles] = useFrame({ x, y, width, height });
     const [$close, close] = stream();
     const [$focus, focus] = stream();
     const zIndex = just(0);

@@ -13,22 +13,16 @@ import { noop } from "./function-stuff";
 import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from "./mat4";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
-import { either, join, just, map, rsquare, state, Stream, zip } from "./stream-stuff";
+import { join, just, map, state, Stream, zip } from "./stream-stuff";
 import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
-import { simpleTitleBar } from "./toolbar-bar";
-import { WindowControls, windowEnvironment, windowPane } from "./window-stuff";
+import { windowEnvironment } from "./window-stuff";
 
 import { scaleLinear, ticks } from "d3";
+import { Timeline } from "./timeline";
+import { SimpleWindow } from "./simple-window";
+import { fetchLf32, fetchLf64 } from "./fetching";
 
 type Handler<T> = (x: T) => void;
-
-const SimpleWindow = (title: string, content: Component): Window => (c: WindowControls) => {
-  const pane = windowPane([
-    simpleTitleBar(title, c.handles.middle, c.close),
-    content,
-  ]);
-  return pane;
-};
 
 type ElementThing = HTMLElement | SVGSVGElement | Component | string | undefined;
 type StreamableCSS = {[K in keyof CSSStyleDeclaration]: string | Stream<string>};
@@ -195,8 +189,18 @@ function erosProgram(m: Model): GraphicsProgram {
           q.w * i.y - q.x * i.z + q.y * i.w + q.z * i.x,
           q.w * i.z + q.x * i.y - q.y * i.x + q.z * i.w, pos.w);
 
+        vec4 ni = vec4(
+          +aVertexNormal.x * q.w - aVertexNormal.y * q.z + aVertexNormal.z * q.y,
+          +aVertexNormal.x * q.z + aVertexNormal.y * q.w - aVertexNormal.z * q.x,
+          -aVertexNormal.x * q.y + aVertexNormal.y * q.x + aVertexNormal.z * q.w,
+          +aVertexNormal.x * q.x + aVertexNormal.y * q.y + aVertexNormal.z * q.z);
+        vec4 normal = vec4(
+            q.w * ni.x + q.x * ni.w + q.y * ni.z - q.z * ni.y,
+            q.w * ni.y - q.x * ni.z + q.y * ni.w + q.z * ni.x,
+            q.w * ni.z + q.x * ni.y - q.y * ni.x + q.z * ni.w, 0);
+
         gl_Position = uProjectionMatrix * uModelViewMatrix * pos;
-        float alp = dot((uModelViewMatrix * vec4(aVertexNormal, 0)).xyz, vec3(0, 1, 0));
+        float alp = dot((uModelViewMatrix * normal).xyz, vec3(0, 1, 0));
         vColor = vec4(alp, alp, alp, 1);
       }
     `, `
@@ -432,9 +436,8 @@ function axesProgram(): GraphicsProgram {
   }
 }
 
-function orbitProgram(): GraphicsProgram {
-  const dataPromise = fetch("/orbit-cart.lf32").then(
-    r => r.arrayBuffer().then(b => new Float32Array(b)));
+function orbitProgram(url: string, color: Vec3): GraphicsProgram {
+  const dataPromise = fetchLf32(url);
   let data: Float32Array | undefined;
   let numVertices = 0;
   dataPromise.then(x => {
@@ -459,12 +462,13 @@ function orbitProgram(): GraphicsProgram {
       uniform highp float time;
       varying highp float vTime;
       void main(void) {
-        highp float t = (vTime - (time - 36000.)) / 36000.;
-        if (t > 0. && t <= 1.) {
-          gl_FragColor = vec4(color, t);
-        } else {
-          discard;
-        }
+        // highp float t = (vTime - (time - 36000.)) / 36000.;
+        // if (t > 0. && t <= 1.) {
+        //   gl_FragColor = vec4(color, t);
+        // } else {
+        //   discard;
+        // }
+        gl_FragColor = vec4(color, 1.);
       }
     `)!;
     const dataBuffer = gl.createBuffer()!;
@@ -478,7 +482,7 @@ function orbitProgram(): GraphicsProgram {
     const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
     const colorUniform = gl.getUniformLocation(program, "color");
     const timeUniform = gl.getUniformLocation(program, "time");
-    const color = vec3(0, 1, 1);
+    const tofs = 0; // Math.random() * 1e7;
     
     const draw = (modelViewMatrix: Mat4) => {
       if (!data) return;
@@ -499,7 +503,7 @@ function orbitProgram(): GraphicsProgram {
       gl.uniformMatrix4fv(projectionMatrixUniform, false, projectionMatrix);
       gl.uniformMatrix4fv(modelViewMatrixUniform, false, modelViewMatrix);
       gl.uniform3fv(colorUniform, color);
-      gl.uniform1f(timeUniform, performance.now() % 1e7);
+      gl.uniform1f(timeUniform, (performance.now() * 10 + tofs) % data[data.length - 4]);
 
       gl.drawArrays(gl.LINE_STRIP, 0, numVertices);
     };
@@ -587,8 +591,6 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   };
 
   const ep = erosProgram(model);
-  
-  const dc = either(rsquare(), vec3(1, 0, 0), vec3(0, 1, 0));
 
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
@@ -629,7 +631,12 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     // dotsProgram(dc)(gl, register, projectionMatrix, resolution),
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
-    orbitProgram()(gl, register, projectionMatrix, resolution),
+    // orbitProgram("/orbit-cart-1-gaf.lf32", vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
+    orbitProgram("/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    // orbitProgram("/orbit-cart-1.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
+    // orbitProgram("/orbit-cart.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
+    // orbitProgram("/orbit-kep.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    // orbitProgram("/orbit-qns.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     mount(container, r),
     domEvent("wheel", e => {
       e.preventDefault();
@@ -949,8 +956,6 @@ const Matte = (content: ElementThing) => div({
   alignItems: 'center',
 }, [content]);
 
-type Window = (c: WindowControls) => Component;
-
 // You create a window controller...
 // You can tell it to open windows.
 // You can tell it to close windows.
@@ -1052,12 +1057,15 @@ const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
 };
 
 
+const plot = (() => {
 const [xlim, setXlim] = state([0, 1] as Limits);
 const [ylim, setYlim] = state([0, 1] as Limits);
 const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, [dada(15), dada(16), dada(17)], {
   requestRegion: onRequest,
   title: conn.quantityName(15).stream,
 }));
+return plot;
+})();
 
 // setInterval(() => appendPoint(Math.random(), Math.random()), 500);
 
@@ -1109,12 +1117,43 @@ addWindow(Finder);
 addWindow(eApp);
 addWindow(qApp);
 
+addWindow(
+  SimpleWindow("Timeline", Timeline()),
+  { x: 300, y: 300, width: 1000, height: 700 });
+
 fetchModel().then(m => addWindow(glApp(m)));
+
+Promise.all([fetchLf32("/error-g00.lf32"), fetchLf64("/true-g00.lf64")]).then(([x, y]) => {
+  const [xlim, setXlim] = state([0, 10] as Limits);
+  const [ylim, setYlim] = state([-2, 2] as Limits);
+  const n = x.length / 2;
+  const t: number[] = [];
+  const v: number[] = [];
+  const filtError: number[] = [];
+  const negFiltError: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const tru = y[2 * i + 1];
+    const err = x[3 * i + 1];
+    const unc = x[3 * i + 2];
+    t.push(y[2 * i]);
+    v.push(tru + err);
+    filtError.push(tru + unc);
+    negFiltError.push(tru - unc);
+  }
+
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
+    just({ t, y: v }),
+    just({ t, y: filtError }),
+    just({ t, y: negFiltError }),
+  ]);
+  const win = SimpleWindow("Plot", plot);
+  addWindow(win);
+});
 
 (window as any).plot = function(ns: number[]) {
   const [xlim, setXlim] = state([0, 10] as Limits);
   const [ylim, setYlim] = state([-2, 2] as Limits);
-  const plot = Plot2D(xlim, ylim, noop, setYlim, ns.map(dada), {
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
     title: conn.quantityName(ns[0] || 0).stream,
   });
   const win = SimpleWindow("Custom", plot);
