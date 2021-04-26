@@ -206,26 +206,34 @@ const MenuBar = (mainMenu: Menu): Component => r => {
   return cleanup(...us);
 };
 
+const desktopBackground = div({
+  background: 'url(https://getwallpapers.com/wallpaper/full/6/0/4/916246-gorgerous-mac-os-x-desktop-backgrounds-2880x1800-for-1080p.jpg)',
+  backgroundSize: 'cover',
+  width: '100%',
+  height: '100%',
+}, [], [
+  contextMenu(menu([
+    menuItem({ label: 'New Folder' }),
+    menuSeparator,
+    menuItem({ label: 'Get Info' }),
+    menuSeparator,
+    menuItem({ label: 'Import from iPhone or iPad' }),
+    menuSeparator,
+    menuItem({ label: 'Change Desktop Background...' }),
+    menuItem({ label: 'Use Stacks' }),
+    menuItem({ label: 'Sort By' }),
+    menuItem({ label: 'Clean Up' }),
+    menuItem({ label: 'Clean Up By' }),
+    menuItem({ label: 'Show View Options' }),
+  ])),
+]);
+
 export const desktop = (env: WindowStream, mainMenu: Menu): Component => r => {
   return div({
     backgroundColor: '#000000',
     width: '100vw',
     height: '100vh',
-  }, [MenuBar(mainMenu)], [
-    contextMenu(menu([
-      menuItem({ label: 'New Folder' }),
-      menuSeparator,
-      menuItem({ label: 'Get Info' }),
-      menuSeparator,
-      menuItem({ label: 'Import from iPhone or iPad' }),
-      menuSeparator,
-      menuItem({ label: 'Change Desktop Background...' }),
-      menuItem({ label: 'Use Stacks' }),
-      menuItem({ label: 'Sort By' }),
-      menuItem({ label: 'Clean Up' }),
-      menuItem({ label: 'Clean Up By' }),
-      menuItem({ label: 'Show View Options' }),
-    ])),
+  }, [MenuBar(mainMenu), desktopBackground], [
     box => env(x => {
       const frame = windowFrame(x.frame, x.zIndex, x.handles, x.content, x.focuses, x.focus);
       x.close(render(frame, box));

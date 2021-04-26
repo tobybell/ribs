@@ -6,7 +6,7 @@ import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } fr
 import { menu, menuItem } from "./menu";
 import { oneHot } from "./one-hot";
 import { Sync } from "./state";
-import { either, enable, Handler, map, state, Stream } from "./stream-stuff";
+import { either, enable, Handler, map, sample, state, Stream } from "./stream-stuff";
 
 export const radio = (active: Stream<boolean>, onClick?: Handler<MouseEvent>) => {
   const [highlight, setHighlight] = state(false);
@@ -145,13 +145,6 @@ export function button(label: Stream<string>, action: Handler<MouseEvent>) {
   ], [
     clickControl(action, setActive),
   ]);
-}
-
-/** Get the "current" value from a stream. */
-function sample<T>(f: Stream<T>, init: T): T;
-function sample<T>(f: Stream<T>, init?: T): T | undefined {
-  f(x => init = x)();
-  return init;
 }
 
 export const select = () => {

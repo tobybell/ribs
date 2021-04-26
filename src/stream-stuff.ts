@@ -249,3 +249,11 @@ export const streamComp = <T>(s: Stream<Temporary<T>>): Temporary<T> => r => {
 export function enable<T = void>(s: Stream<boolean>, c: Temporary<T>): Temporary<T> {
   return streamComp(map(s, x => x ? c : empty));
 }
+
+/** Get the "current" value from a stream, if one is immediately available. */
+export function sample<T, S>(f: Stream<T>, init: S): T | S;
+export function sample<T, S>(f: Stream<T>, init?: S): T | S | undefined {
+  let val: S | T | undefined = init;
+  f(x => val = x)();
+  return val;
+}

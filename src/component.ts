@@ -49,3 +49,10 @@ export function domEvent<Type extends keyof HTMLElementEventMap>(
 export const inputType = (v: string) => (n: HTMLInputElement) => (n.type = v, noop);
 
 export const inputValue = (v: Stream<string>) => (n: HTMLInputElement) => v(x => n.value = x);
+
+export const delayedComponent = (x: Promise<Component>): Component => r => {
+  let mounted = true;
+  let c = noop;
+  x.then(f => mounted && (c = f(r)));
+  return () => (mounted = false, c());
+}

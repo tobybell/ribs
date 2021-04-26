@@ -71,10 +71,27 @@ export function openMenuIn(menu: Menu, r: HTMLElement, onDismiss: Thunk) {
   return close;
 }
 
-export function contextMenu(menu: Menu): Effect {
-  return domEvent('contextmenu', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    showContextMenu(e, menu);
-  });
-}
+export const contextMenu = (menu: Menu): Effect => r => {
+  let doingRightClick = false;
+  return cleanup(
+    domEvent('selectstart', e => {
+      if (doingRightClick)
+        e.preventDefault();
+    })(r),
+    domEvent('mousedown', e => {
+      if (e.button != 2) return;
+      doingRightClick = true;
+      e.preventDefault();
+      const finishClick = () => {
+        doingRightClick = false;
+        window.removeEventListener('mouseup', finishClick);
+      };
+      window.addEventListener('mouseup', finishClick);
+    })(r),
+    domEvent('contextmenu', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      showContextMenu(e, menu);
+    })(r),
+  );
+};

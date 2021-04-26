@@ -44,7 +44,7 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
       wc = undefined;
       if (done) return;
       console.warn("Socket closed! Trying to reconnect...");
-      setTimeout(init, 5000);
+      setTimeout(init, 20000);
     };
   };
   init();

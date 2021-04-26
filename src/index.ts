@@ -18,9 +18,10 @@ import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
 import { windowEnvironment } from "./window-stuff";
 
 import { scaleLinear, ticks } from "d3";
-import { Timeline } from "./timeline";
+import { SimulationTimelineWindow, TimelineWindow } from "./timeline";
 import { SimpleWindow } from "./simple-window";
 import { fetchLf32, fetchLf64 } from "./fetching";
+import { SimulationsList } from "./SimulationsList";
 
 type Handler<T> = (x: T) => void;
 
@@ -632,7 +633,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart-1-gaf.lf32", vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
-    orbitProgram("/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    orbitProgram("http://localhost/extrap/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart-1.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-kep.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
@@ -656,22 +657,35 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
 
 interface PlotOptions {
   requestRegion?: Handler<Limits>;
-  title?: Stream<string>;
+  title?: string | Stream<string>;
+  xLabel?: string | Stream<string>;
+  yLabel?: string | Stream<string>;
+  showXAxis?: boolean;
+  xAxisScale?: number;
+  yAxisScale?: number;
 }
+
+type Series = Data & { color?: string, width?: number };
 
 const Plot2D = (
   xlim: Stream<Limits>,
   ylim: Stream<Limits>,
   onSetXLim: Handler<Limits>,
   onSetYLim: Handler<Limits>,
-  data: Stream<Data>[],
+  data: Stream<Series>[],
   {
     requestRegion = noop,
     title = just("Plot"),
+    xLabel = just('Time [s]'),
+    yLabel = just('Position'),
+    showXAxis = false,
+    xAxisScale = 1,
+    yAxisScale = 1,
   }: PlotOptions = {},
 ): Component => {
-  const xLabel = just('Time [s]');
-  const yLabel = just('Position');
+  const _title = typeof title === 'string' ? just(title) : title;
+  const _xLabel = typeof xLabel === 'string' ? just(xLabel) : xLabel;
+  const _yLabel = typeof yLabel === 'string' ? just(yLabel) : yLabel;
 
   const tickLength = 5;
   const axisPad = 4;
@@ -791,7 +805,7 @@ const Plot2D = (
         ctx.scale(2, 2);
       }));
 
-      const axisConfig = join({ size, xlim, ylim, xLabel, yLabel, title, data: zip(data) });
+      const axisConfig = join({ size, xlim, ylim, xLabel: _xLabel, yLabel: _yLabel, title: _title, data: zip(data) });
 
       interface AxisConfig {
         size: RectSize;
@@ -800,7 +814,7 @@ const Plot2D = (
         title?: string;
         xLabel?: string;
         yLabel?: string;
-        data: Data[];
+        data: Series[];
       }
 
       // Whenever width changes, need to compute a new left and right.
@@ -812,14 +826,14 @@ const Plot2D = (
 
         const top = title ? 25 : 10;
         const bottom = height - (xLabel ? 38 : 18);
-        const yts = ticks(yMin, yMax, Math.abs(top - bottom) / 60);
+        const yts = ticks(yMin * yAxisScale, yMax * yAxisScale, Math.abs(top - bottom) / 60);
         ctx.font = tickFont;
         const maxWidth = Math.ceil(Math.max(0, ...yts.map(t => ctx.measureText(`${t}`).width)));
         const left = maxWidth + (yLabel ? 25 : 9);
         const right = width - 10;
         const xMid = (left + right) / 2;
         const yMid = (top + bottom) / 2;
-        const xts = ticks(xMin, xMax, Math.abs(right - left) / 60);
+        const xts = ticks(xMin * xAxisScale, xMax * xAxisScale, Math.abs(right - left) / 60);
         xs.domain([xMin, xMax]).range([left, right]);
         ys.domain([yMin, yMax]).range([bottom, top]);
         ctx.fillStyle = '#000';
@@ -830,7 +844,7 @@ const Plot2D = (
         ctx.textBaseline = 'top';
         ctx.beginPath();
         for (const t of xts) {
-          const x = xs(t);
+          const x = xs(t / xAxisScale);
           ctx.moveTo(x, bottom);
           ctx.lineTo(x, bottom - tickLength);
           ctx.fillText(`${t}`, x, bottom + 3);
@@ -842,16 +856,36 @@ const Plot2D = (
         ctx.textBaseline = 'middle';
         ctx.beginPath();
         for (const t of yts) {
-          const y = ys(t);
+          const y = ys(t / yAxisScale);
           ctx.moveTo(left, y);
           ctx.lineTo(left + tickLength, y);
           ctx.fillText(`${t}`, left - axisPad, y);
         }
         ctx.stroke();
 
-        for (const {t: dx, y: dy} of data) {
+        if (showXAxis) {
+          ctx.save();
+          ctx.strokeStyle = '#888888';
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(left, ys(0));
+          ctx.lineTo(right, ys(0));
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(right, top);
+        ctx.lineTo(right, bottom);
+        ctx.lineTo(left, bottom);
+        ctx.closePath();
+        ctx.clip();
+        for (const {t: dx, y: dy, color = '#2965CC', width = 1} of data) {
           const N = dx.length;
-          ctx.strokeStyle = '#2965CC';
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
           ctx.beginPath();
           ctx.moveTo(xs(dx[0]), ys(dy[0]));
           for (let i = 1; i <= N; i += 1) {
@@ -859,6 +893,7 @@ const Plot2D = (
           }
           ctx.stroke();
         }
+        ctx.restore();
 
         // Draw borders.
         ctx.strokeStyle = '#000';
@@ -1113,42 +1148,97 @@ const dt = desktop(windows, safariMenu);
 
 render(dt, document.body);
 
-addWindow(Finder);
 addWindow(eApp);
 addWindow(qApp);
 
 addWindow(
-  SimpleWindow("Timeline", Timeline()),
+  SimulationTimelineWindow('uextrap'),
   { x: 300, y: 300, width: 1000, height: 700 });
+
+addWindow(
+  SimulationsList({
+    onOpenTimeline: s => addWindow(SimulationTimelineWindow(s)),
+  }),
+  { x: 300, y: 300, width: 400, height: 600 },
+);
 
 fetchModel().then(m => addWindow(glApp(m)));
 
-Promise.all([fetchLf32("/error-g00.lf32"), fetchLf64("/true-g00.lf64")]).then(([x, y]) => {
-  const [xlim, setXlim] = state([0, 10] as Limits);
-  const [ylim, setYlim] = state([-2, 2] as Limits);
-  const n = x.length / 2;
-  const t: number[] = [];
-  const v: number[] = [];
-  const filtError: number[] = [];
-  const negFiltError: number[] = [];
-  for (let i = 0; i < n; i += 1) {
-    const tru = y[2 * i + 1];
-    const err = x[3 * i + 1];
-    const unc = x[3 * i + 2];
-    t.push(y[2 * i]);
-    v.push(tru + err);
-    filtError.push(tru + unc);
-    negFiltError.push(tru - unc);
-  }
+filterErrorPlot('extrap', 'c00', 'C₀₀ (µ)');
+filterErrorPlot('extrap', 'c20', 'C₂₀');
+filterErrorPlot('extrap', 'c21', 'C₂₁');
+filterErrorPlot('extrap', 'c22', 'C₂₂');
+filterErrorPlot('extrap', 's21', 'S₂₁');
+filterErrorPlot('extrap', 's22', 'S₂₂');
+filterErrorPlot('extrap', 'pos', 'Position');
+scalarResidualPlot('posonly', 'pos', 'Position residual');
 
-  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
-    just({ t, y: v }),
-    just({ t, y: filtError }),
-    just({ t, y: negFiltError }),
-  ]);
-  const win = SimpleWindow("Plot", plot);
-  addWindow(win);
-});
+function scalarResidualPlot(sim: string, vari: string, title: string) {
+  fetchLf32(`http://localhost/${sim}/res-${vari}.lf32`).then(x => {
+    const [xlim, setXlim] = state([0, 5 * 86400] as Limits);
+    const [ylim, setYlim] = state([-11.9324, 11.9324] as Limits);
+    const n = x.length / 2;
+    const t: number[] = [];
+    const v: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const time = x[2 * i];
+      const val = x[2 * i + 1];
+      t.push(time);
+      v.push(val);
+    }
+
+    const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
+      just({ t, y: v, width: 1.5 }),
+    ], {
+      title,
+      xLabel: 'Time [d]',
+      yLabel: 'Residual [m]',
+      showXAxis: true,
+      xAxisScale: 1/86400,
+    });
+    const win = SimpleWindow("Plot", plot);
+    addWindow(win, {x: 500, y: 500});
+  });
+}
+
+function filterErrorPlot(sim: string, vari: string, title: string) {
+  const finalStatisticsWindow = 86400;
+
+
+  fetchLf32(`http://localhost/${sim}/error-${vari}.lf32`).then(x => {
+    const [xlim, setXlim] = state([0, 11 * 86400] as Limits);
+    const [ylim, setYlim] = state([-111573.9324, 111573.9324] as Limits);
+    const n = x.length / 3;
+    const t: number[] = [];
+    const v: number[] = [];
+    const filtError: number[] = [];
+    const negFiltError: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const time = x[3 * i];
+      const err = x[3 * i + 1];
+      const unc = x[3 * i + 2];
+      t.push(time);
+      v.push(err);
+      filtError.push(+unc);
+      negFiltError.push(-unc);
+    }
+
+    const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
+      just({ t, y: v, width: 1.5 }),
+      just({ t, y: filtError, color: 'rgba(41, 101, 204, 0.5)' }),
+      just({ t, y: negFiltError, color: 'rgba(41, 101, 204, 0.5)' }),
+    ], {
+      title,
+      xLabel: 'Time [d]',
+      yLabel: 'Relative error [µ]',
+      showXAxis: true,
+      xAxisScale: 1/86400,
+      yAxisScale: 1/446295.7296,
+    });
+    const win = SimpleWindow("Plot", plot);
+    addWindow(win, {x: 500, y: 500});
+  });
+}
 
 (window as any).plot = function(ns: number[]) {
   const [xlim, setXlim] = state([0, 10] as Limits);

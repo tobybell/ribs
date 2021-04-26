@@ -19,3 +19,5 @@ function callable<A extends any[], R, T>(c: T, f: (...a: A) => R) {
   Object.keys(c).forEach(k => (fn as any)[k] = (c as any)[k]);
   return fn as T & ((...a: A) => R);
 }
+
+export const exists = <T>(x: T | undefined): x is T => !!x;

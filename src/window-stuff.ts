@@ -18,6 +18,7 @@ export interface WindowHandles {
 }
 
 export interface WindowControls {
+  frame: Stream<Frame>;
   close(): void;
   minimize(): void;
   maximize(): void;
@@ -200,6 +201,7 @@ export const windowEnvironment = (): [WindowStream, WindowAdder] => {
     const [$focus, focus] = stream();
     const zIndex = just(0);
     const content = w({
+      frame,
       close: () => closeWindow(k),
       handles,
       minimize: null as any,

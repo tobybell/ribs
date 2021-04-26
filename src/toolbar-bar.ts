@@ -68,7 +68,18 @@ const windowTitle = (title: string) => div({
   title,
 ]);
 
-const titleBar = (title: string, onClose: Handler<void>) => div({
+/** Title for representing the name of some user content. Just a bolder
+ * typeface. */
+export const contentTitle = (title: string) => div({
+  fontWeight: "600",
+  cursor: "default",
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  color: '#a7a7aa',
+}, [title]);
+
+const titleBar = (title: string | Component, onClose: Handler<void>) => div({
   display: 'flex',
   height: '22px',
   width: '100%',
@@ -76,7 +87,7 @@ const titleBar = (title: string, onClose: Handler<void>) => div({
   alignItems: 'center',
 }, [
   windowButtons(onClose),
-  windowTitle(title),
+  typeof title === 'string' ? windowTitle(title) : title,
   div({
     flex: '0 10000 52px',
     height: '8px',
@@ -84,7 +95,7 @@ const titleBar = (title: string, onClose: Handler<void>) => div({
   }),
 ]);
 
-export function simpleTitleBar(title: string, windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
+export function simpleTitleBar(title: string | Component, windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
   return div({
     flex: '0 0 auto',
     alignSelf: 'stretch',
