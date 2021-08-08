@@ -48,7 +48,6 @@ export const win = ident<Window>();
 
 interface WindowRecord {
   frame: Stream<Frame>;
-  zIndex: Stream<number>;
   handles: WindowHandles;
   content: Component;
   close: Stream<void>;
@@ -210,7 +209,6 @@ export const windowEnvironment = (): [WindowStream, WindowAdder] => {
     });
     windows[k] = [close, {
       frame,
-      zIndex,
       handles,
       content,
       close: $close,

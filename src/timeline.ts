@@ -371,7 +371,7 @@ const statLabel = (label: string, value: Stream<number | null>) => div({
   backgroundColor: 'rgba(255, 255, 255, 0.15)',
   padding: '0 6px',
   display: 'flex',
-}, [label, text(map(value, x => `${x}`))]);
+}, [label, text(map(value, x => x ? x.toPrecision(6) : '...'))]);
 
 const simpleTrackHeader = (title: string, min?: Stream<number | null>, max?: Stream<number | null>): Header => width => div({
   width,
@@ -457,8 +457,8 @@ const positionTrack = (url: string): Track => ctx => {
 const defaultUncertaintyTrack = (name: string) =>
   uncertaintyTrack(`/error-${name}.lf32`);
 
-const simUncertaintyTrack = (sim: string, vari: string) =>
-  uncertaintyTrack(`http://localhost/${sim}/error-${vari}.lf32`);
+const simUncertaintyTrack = (sim: string, vari: string, yMin?: number, yMax?: number) =>
+  uncertaintyTrack(`http://localhost/${sim}/error-${vari}.lf32`, yMin, yMax);
 
 const simEventTrack = (sim: string, vari: string) =>
   eventTrack(`http://localhost/${sim}/event-${vari}.lf32`);
@@ -470,11 +470,11 @@ const varName = (url: string) => {
   return url.substring(b, c);
 };
 
-const uncertaintyTrack = (url: string): Track => ctx => {
+const uncertaintyTrack = (url: string, yMin?: number, yMax?: number): Track => ctx => {
   const data = fetchLf32(url);
 
-  const minY$ = state<number | null>(null);
-  const maxY$ = state<number | null>(null);
+  const minY$ = state<number | null>(yMin == undefined ? null : yMin);
+  const maxY$ = state<number | null>(yMax == undefined ? null : yMax);
 
   const dataPack = data.then(series => {
     const n = series.length;
@@ -488,6 +488,8 @@ const uncertaintyTrack = (url: string): Track => ctx => {
       if (-p < minY) minY = -p;
       if (p > maxY) maxY = p;
     }
+    if (yMin != undefined) minY = yMin;
+    if (yMax != undefined) maxY = yMax;
     minY$.set(minY);
     maxY$.set(maxY);
     return [series, minY, maxY] as const;
@@ -673,7 +675,6 @@ export const TimelineWindow = () =>
 
 export const SimulationTimelineWindow = (sim: string) =>
   SharedTimelineWindow(contentTitle(sim),
-    simTrueTrack(sim, "g00"),
     simCartTrack(sim),
     simUncertaintyTrack(sim, "c00"),
     simUncertaintyTrack(sim, "pos"),
@@ -682,5 +683,39 @@ export const SimulationTimelineWindow = (sim: string) =>
     simUncertaintyTrack(sim, "c00-sim3"),
     simUncertaintyTrack(sim, "c00-sim4"),
     simUncertaintyTrack(sim, "c00-sim5"),
+    simUncertaintyTrack(sim, "c00-sim6"),
+    simUncertaintyTrack(sim, "c00-sim7"),
+    simUncertaintyTrack(sim, "c00-sim8"),
+    simUncertaintyTrack(sim, "c00-sim9"),
+    simUncertaintyTrack(sim, "c00-sim10"),
+    simUncertaintyTrack(sim, "c00-sim11"),
+    simUncertaintyTrack(sim, "c00-sim12"),
+    // simUncertaintyTrack(sim, "c00-sim13"),
+    // simUncertaintyTrack(sim, "c00-sim14"),
+    // simUncertaintyTrack(sim, "c00-sim15"),
+    // simUncertaintyTrack(sim, "c00-sim16"),
+    // simUncertaintyTrack(sim, "c00-sim17"),
+    // simUncertaintyTrack(sim, "c00-sim18"),
+    // simUncertaintyTrack(sim, "c00-sim19"),
+    // simUncertaintyTrack(sim, "c00-sim20"),
+    // simUncertaintyTrack(sim, "c00-sim21"),
+    // simUncertaintyTrack(sim, "c00-sim22"),
+    // simUncertaintyTrack(sim, "c00-sim23"),
+    // simUncertaintyTrack(sim, "c00-sim24"),
+    // simUncertaintyTrack(sim, "c00-sim25"),
+    // simUncertaintyTrack(sim, "c00-sim26"),
+    // simUncertaintyTrack(sim, "c00-sim27"),
+    // simUncertaintyTrack(sim, "c00-sim28"),
+    // simUncertaintyTrack(sim, "c00-sim29"),
+    // simUncertaintyTrack(sim, "c00-sim30"),
+    // simUncertaintyTrack(sim, "c00-sim31"),
+    // simUncertaintyTrack(sim, "c00-sim32"),
+    // simUncertaintyTrack(sim, "c00-sim33"),
+    // simUncertaintyTrack(sim, "c00-sim34"),
+    // simUncertaintyTrack(sim, "c00-sim35"),
+    // simUncertaintyTrack(sim, "c00-sim36"),
+    // simUncertaintyTrack(sim, "c00-sim37"),
+    // simUncertaintyTrack(sim, "c00-sim38"),
+    // simUncertaintyTrack(sim, "c00-sim39"),
     // simEventTrack(sim, 'meas'),
   );

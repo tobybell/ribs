@@ -2,6 +2,7 @@ import { clickControl } from "./click-control";
 import { Component, domEvent } from "./component";
 import { openMenu } from "./context-menu";
 import { div, text } from "./div";
+import { noop } from "./function-stuff";
 import { checkmark, nsChevronIcon, smallChevronDownIcon, smallChevronUpIcon } from "./icons";
 import { menu, menuItem } from "./menu";
 import { oneHot } from "./one-hot";
@@ -51,7 +52,7 @@ export function checkbox(checked: Sync<boolean>) {
   ]);
 }
 
-export function slider(value: Sync<number>) {
+export function rawSlider(value: Stream<number>, onChange: Handler<number> = noop) {
   return div({
     height: '15px',
     margin: '16px',
@@ -67,7 +68,7 @@ export function slider(value: Sync<number>) {
         backgroundColor: '#3268de',
         height: '100%',
         width: '100%',
-        transform: map(value.stream, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
+        transform: map(value, v => `translateX(${50 * (v - 1)}%) scaleX(${v})`),
       }),
     ]),
     div({
@@ -76,7 +77,7 @@ export function slider(value: Sync<number>) {
       position: 'absolute',
       top: '0',
       left: '0',
-      transform: map(value.stream, v => `translateX(calc(${v} * (100% - 15px)))`),
+      transform: map(value, v => `translateX(calc(${v} * (100% - 15px)))`),
     }, [
       div({
         backgroundColor: '#ccc',
@@ -97,9 +98,9 @@ export function slider(value: Sync<number>) {
       const update = (e: MouseEvent) => {
         const lerp = (e.clientX - left) / width;
         const newVal = Math.min(Math.max(lerp, 0), 1);
-        value.set(newVal);
+        onChange(newVal);
       };
-    
+
       const stopUpdate = () => {
         window.removeEventListener('mousemove', update);
         window.removeEventListener('mouseup', stopUpdate);
@@ -111,6 +112,11 @@ export function slider(value: Sync<number>) {
     }),
   ]);
 }
+
+export const slider = (value: Sync<number>) => rawSlider(
+  value.stream,
+  value.set,
+);
 
 // TODO: Use a CSS pseudo-element for this?
 const gloss = div({

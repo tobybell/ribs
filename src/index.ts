@@ -3,32 +3,33 @@ import { Finder } from "./apps/Finder";
 import { PreferredNetworks } from "./apps/PreferredNetworks";
 import { Quantities } from "./apps/Quantities";
 import { binsert } from "./bsearch";
-import { Component, domEvent, Effect, mount, render } from "./component";
+import { Component, delayedComponent, domEvent, Effect, mount, render } from "./component";
 import { connect } from "./connection";
 import { Data, DataStore, Quantity, Time } from "./data-stuff";
 import { desktop } from "./desktop";
-import { div } from "./div";
+import { children, div, divr, style } from "./div";
 import { elem } from "./elem";
 import { noop } from "./function-stuff";
 import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from "./mat4";
 import { menu, menuItem, menuSeparator } from "./menu";
 import { posaphore } from "./posaphore";
-import { join, just, map, state, Stream, zip } from "./stream-stuff";
-import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
+import { deferred, join, just, map, square, state, stream, Stream, time, zip } from "./stream-stuff";
+import { Cleanup, cleanup, cleanupFrom, empty, Temporary } from "./temporary-stuff";
 import { windowEnvironment } from "./window-stuff";
 
-import { scaleLinear, ticks } from "d3";
+import { ScaleLinear, scaleLinear, ticks } from "d3";
 import { SimulationTimelineWindow, TimelineWindow } from "./timeline";
 import { SimpleWindow } from "./simple-window";
 import { fetchLf32, fetchLf64 } from "./fetching";
 import { SimulationsList } from "./SimulationsList";
+import { rawSlider, slider } from "./controls";
 
 type Handler<T> = (x: T) => void;
 
 type ElementThing = HTMLElement | SVGSVGElement | Component | string | undefined;
 type StreamableCSS = {[K in keyof CSSStyleDeclaration]: string | Stream<string>};
 
-type Limits = [number, number];
+type Limits = readonly [number, number];
 type RectSize = [number, number]; // width, height
 
 
@@ -633,7 +634,7 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart-1-gaf.lf32", vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
-    orbitProgram("http://localhost/extrap/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    orbitProgram("http://localhost/uextrap/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart-1.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-cart.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram("/orbit-kep.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
@@ -655,37 +656,65 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   );
 });
 
+interface PlotContext {
+  ctx: CanvasRenderingContext2D;
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+  xs: ScaleLinear<number, number>;
+  ys: ScaleLinear<number, number>;
+}
+
+type PlotDrawer = Handler<PlotContext>;
+type PlotComponent = Stream<PlotDrawer>;
+
 interface PlotOptions {
   requestRegion?: Handler<Limits>;
-  title?: string | Stream<string>;
+  title?: string | Stream<string | undefined>;
   xLabel?: string | Stream<string>;
   yLabel?: string | Stream<string>;
   showXAxis?: boolean;
   xAxisScale?: number;
   yAxisScale?: number;
+  legend?: string[];
+  drawers?: PlotComponent[];
+  // TODO:
+  // onXScaleChange
+  // onYScaleChange
+  // onXOffsetChange
+  // onYOffsetChange
 }
 
-type Series = Data & { color?: string, width?: number };
+type Series = Data & { color?: string, width?: number, points?: boolean };
 
 const Plot2D = (
   xlim: Stream<Limits>,
   ylim: Stream<Limits>,
   onSetXLim: Handler<Limits>,
   onSetYLim: Handler<Limits>,
-  data: Stream<Series>[],
   {
+    legend = [],
     requestRegion = noop,
-    title = just("Plot"),
+    title = just(undefined),
     xLabel = just('Time [s]'),
     yLabel = just('Position'),
     showXAxis = false,
     xAxisScale = 1,
     yAxisScale = 1,
+    drawers = [],
   }: PlotOptions = {},
 ): Component => {
   const _title = typeof title === 'string' ? just(title) : title;
   const _xLabel = typeof xLabel === 'string' ? just(xLabel) : xLabel;
   const _yLabel = typeof yLabel === 'string' ? just(yLabel) : yLabel;
+
+  const backgroundColor = '#000';
+  const foregroundColor = '#fff';
 
   const tickLength = 5;
   const axisPad = 4;
@@ -698,7 +727,7 @@ const Plot2D = (
   const ys = scaleLinear();
 
   /* Requested region covers 3x the xlim range. */
-  const reqReg = map(xlim, ([a, b]) => [2 * a - b, 2 * b - a]);
+  const reqReg = map(xlim, ([a, b]) => [2 * a - b, 2 * b - a] as const);
 
   // Wrap region requests in a posaphore, so multiple instances of this canvas
   // don't request multiple times.
@@ -805,7 +834,19 @@ const Plot2D = (
         ctx.scale(2, 2);
       }));
 
-      const axisConfig = join({ size, xlim, ylim, xLabel: _xLabel, yLabel: _yLabel, title: _title, data: zip(data) });
+      const cachedDrawerStreams: Cleanup[] = [];
+      const cachedDrawers: PlotDrawer[] = [];
+      const [drawersChanged, changeDrawers] = stream();
+      drawers.forEach((x, i) => {
+        cachedDrawers.push(noop);
+        cachedDrawerStreams.push(x(drawer => {
+          cachedDrawers[i] = drawer;
+          changeDrawers();
+        }));
+      });
+      cleanups.push(cleanupFrom(cachedDrawerStreams));
+
+      const axisConfig = join({ size, xlim, ylim, xLabel: _xLabel, yLabel: _yLabel, title: _title, drawersChanged });
 
       interface AxisConfig {
         size: RectSize;
@@ -814,14 +855,31 @@ const Plot2D = (
         title?: string;
         xLabel?: string;
         yLabel?: string;
-        data: Series[];
+        drawersChanged: void;
       }
 
       // Whenever width changes, need to compute a new left and right.
       // Whenever height changes, 
 
-      const drawAxes = ({ xLabel, yLabel, title, size: [width, height], xlim: [xMin, xMax], ylim: [yMin, yMax], data }: AxisConfig) => {
-        ctx.fillStyle = '#fff';
+      const legendMargin = 10;
+      const legendTopMargin = legendMargin;
+      const legendRightMargin = legendMargin;
+      const legendPad = 6;
+      const legendLineSpacing = 4;
+      const legendLineHeight = 12;
+      ctx.font = labelFont;
+      const legendWidth = 2 * legendPad + (legend.length ? Math.max(...legend.map(x => ctx.measureText(x).width)) : 0);
+      const legendHeight = 2 * legendPad + legendLineHeight + (legend.length - 1) * (legendLineHeight + legendLineSpacing);
+
+      // Define a persistent context object that we can repeatedly pass to new
+      // drawers. This is a mutable thing we will update as parameters change.
+      const ourCtx: PlotContext = {
+        ctx, top: 0, bottom: 1, left: 0, right: 0, xMin: 0, xMax: 1, yMin: 0,
+        yMax: 1, xs, ys,
+      };
+
+      const drawAxes = ({ xLabel, yLabel, title, size: [width, height], xlim: [xMin, xMax], ylim: [yMin, yMax] }: AxisConfig) => {
+        ctx.fillStyle = backgroundColor;
         ctx.fillRect(0, 0, width, height);
 
         const top = title ? 25 : 10;
@@ -836,8 +894,10 @@ const Plot2D = (
         const xts = ticks(xMin * xAxisScale, xMax * xAxisScale, Math.abs(right - left) / 60);
         xs.domain([xMin, xMax]).range([left, right]);
         ys.domain([yMin, yMax]).range([bottom, top]);
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = foregroundColor;
         ctx.lineWidth = 1;
+
+        Object.assign(ourCtx, {top, bottom, left, right, xMin, xMax, yMin, yMax});
 
         // Draw x ticks.
         ctx.textAlign = 'center';
@@ -874,6 +934,7 @@ const Plot2D = (
           ctx.restore();
         }
 
+        // Draw drawers.
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(left, top);
@@ -882,21 +943,31 @@ const Plot2D = (
         ctx.lineTo(left, bottom);
         ctx.closePath();
         ctx.clip();
-        for (const {t: dx, y: dy, color = '#2965CC', width = 1} of data) {
-          const N = dx.length;
-          ctx.strokeStyle = color;
-          ctx.lineWidth = width;
-          ctx.beginPath();
-          ctx.moveTo(xs(dx[0]), ys(dy[0]));
-          for (let i = 1; i <= N; i += 1) {
-            ctx.lineTo(xs(dx[i]), ys(dy[i]));
-          }
-          ctx.stroke();
-        }
+        cachedDrawers.forEach(f => f(ourCtx));
         ctx.restore();
 
+        // Draw legend.
+        ctx.fillStyle = backgroundColor;
+        ctx.strokeStyle = foregroundColor;
+        ctx.lineWidth = 1;
+        if (legend.length) {
+          const legendLeft = right - legendWidth - legendRightMargin;
+          const legendTop = top + legendTopMargin;
+          ctx.beginPath();
+          ctx.rect(legendLeft, legendTop, legendWidth, legendHeight);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = foregroundColor;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.font = labelFont;
+          for (let i = 0; i < legend.length; i += 1) {
+            ctx.fillText(legend[i], legendLeft + legendPad, legendTop + legendPad + i * (legendLineHeight + legendLineSpacing) + legendLineHeight);
+          }
+        }
+        ctx.fillStyle = foregroundColor;
+
         // Draw borders.
-        ctx.strokeStyle = '#000';
         ctx.beginPath();
         ctx.moveTo(left, top);
         ctx.lineTo(right, top);
@@ -1028,7 +1099,7 @@ const onRequest = (region: Limits) => {
   console.log('request', region);
 };
 
-const dada = (q: Quantity): Stream<Data> => h => {
+const dada = (q: Quantity): Stream<PlotDrawer> => h => {
   const result: Data = { t: [], y: [] };
   return conn.quantityData(q).stream({
     init(x) {
@@ -1039,17 +1110,17 @@ const dada = (q: Quantity): Stream<Data> => h => {
         result.t[i] = v.time;
         result.y[i++] = v.value;
       }
-      h(result);
+      h(series(result));
     },
     add(x) {
       const i = binsert(result.t, x.time, (a, b) => a - b);
       result.y.splice(i, 0, x.value);
-      h(result);
+      h(series(result));
     },
   });
 };
 
-const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
+const naiveDada2 = (a: Quantity, b: Quantity): PlotComponent => h => {
   const result: Data = { t: [], y: [] };
   const aT: Time[] = [];
   const bT: Time[] = [];
@@ -1063,12 +1134,12 @@ const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
           aT[i] = v.time;
           result.t[i++] = v.value;
         }
-        h(result);
+        h(series(result));
       },
       add(x) {
         const i = binsert(aT, x.time, (a, b) => a - b);
         result.t.splice(i, 0, x.value);
-        h(result);
+        h(series(result));
       },
     }),
     conn.quantityData(b).stream({
@@ -1080,12 +1151,12 @@ const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
           bT[i] = v.time;
           result.y[i++] = v.value;
         }
-        h(result);
+        h(series(result));
       },
       add(x) {
         const i = binsert(bT, x.time, (a, b) => a - b);
         result.y.splice(i, 0, x.value);
-        h(result);
+        h(series(result));
       },
     }),
   );
@@ -1095,9 +1166,12 @@ const naiveDada2 = (a: Quantity, b: Quantity): Stream<Data> => h => {
 const plot = (() => {
 const [xlim, setXlim] = state([0, 1] as Limits);
 const [ylim, setYlim] = state([0, 1] as Limits);
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, [dada(15), dada(16), dada(17)], {
+const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, {
   requestRegion: onRequest,
   title: conn.quantityName(15).stream,
+  drawers: [
+    dada(15), dada(16), dada(17)
+  ]
 }));
 return plot;
 })();
@@ -1125,6 +1199,13 @@ const appleMenu = menu([
 const eApp = Emitter(conn.writer);
 const qApp = Quantities(conn.quantities, conn.quantityName, conn.writer);
 
+const openSimulationsList = () => addWindow(
+  SimulationsList({
+    onOpenTimeline: s => addWindow(SimulationTimelineWindow(s)),
+  }),
+  { x: 300, y: 300, width: 400, height: 600 },
+);
+
 const safariMenu = menu([
   menuItem({ label: 'About Safari', action: () => addWindow(Finder) }),
   menuItem({ label: 'Safari Extensions...', action: () => addWindow(plot) }),
@@ -1135,7 +1216,7 @@ const safariMenu = menu([
   menuSeparator,
   menuItem({ label: 'Clear History...', action: () => addWindow(qApp) }),
   menuSeparator,
-  menuItem({ label: 'Services' }),
+  menuItem({ label: 'Simulations...', action: openSimulationsList }),
   menuSeparator,
   menuItem({ label: 'Hide Safari' }),
   menuItem({ label: 'Hide Others' }),
@@ -1148,30 +1229,308 @@ const dt = desktop(windows, safariMenu);
 
 render(dt, document.body);
 
-addWindow(eApp);
-addWindow(qApp);
+// addWindow(eApp);
+// addWindow(qApp);
 
 addWindow(
   SimulationTimelineWindow('uextrap'),
   { x: 300, y: 300, width: 1000, height: 700 });
 
-addWindow(
-  SimulationsList({
-    onOpenTimeline: s => addWindow(SimulationTimelineWindow(s)),
-  }),
-  { x: 300, y: 300, width: 400, height: 600 },
-);
-
 fetchModel().then(m => addWindow(glApp(m)));
 
-filterErrorPlot('extrap', 'c00', 'C₀₀ (µ)');
-filterErrorPlot('extrap', 'c20', 'C₂₀');
-filterErrorPlot('extrap', 'c21', 'C₂₁');
-filterErrorPlot('extrap', 'c22', 'C₂₂');
-filterErrorPlot('extrap', 's21', 'S₂₁');
-filterErrorPlot('extrap', 's22', 'S₂₂');
-filterErrorPlot('extrap', 'pos', 'Position');
-scalarResidualPlot('posonly', 'pos', 'Position residual');
+const limits = (a: number[]): Limits => {
+  const n = a.length;
+  if (n === 0)
+    return [0, 1];
+  let min = a[0];
+  let max = a[0];
+  for (let i = 1; i < n; ++i) {
+    const x = a[i];
+    if (x < min)
+      min = x;
+    if (x > max)
+      max = x;
+  }
+  const delta = max - min;
+  if (delta === 0) {
+    max += 0.5;
+    min -= 0.5;
+  } else {
+    max += delta / 6;
+    min -= delta / 6;
+  }
+  return [min, max];
+}
+
+const gaussianLine = (mean: number, stddev: number, color: string, dashed = false): PlotDrawer => {
+  const dashedCfg = dashed ? [8, 8] : [];
+  return ({ctx, top, bottom, left, right, xMin, xMax, yMin, yMax}) => {
+    const yScale = (top - bottom) / (yMax - yMin);
+    const yOffset = top - yScale * yMax;
+
+    const isd = 1 / stddev;
+    const scaleFactor = isd / Math.sqrt(2 * Math.PI);
+
+    const xSpan = xMax - xMin;
+    const hSpan = right - left;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.setLineDash(dashedCfg);
+    ctx.beginPath();
+    {
+      const x = xMin;
+      const ofs = (x - mean)  * isd;
+      const y = scaleFactor * Math.exp(-.5 * ofs * ofs);
+      const yp = yOffset + y * yScale;
+      ctx.moveTo(left, yp);
+    }
+    for (let i = .00390625; i <= 1; i += .00390625) {
+      const x = xMin + i * xSpan;
+      const ofs = (x - mean) * isd;
+      const y = scaleFactor * Math.exp(-.5 * ofs * ofs);
+      const xp = left + i * hSpan;
+      const yp = yOffset + y * yScale;
+      ctx.lineTo(xp, yp);
+    }
+    ctx.stroke();
+  };
+};
+
+const seriesFromUrl = (url: string) => fetchLf32(url).then(x => {
+  const y = [...x.map(_ => 0)];
+  const t = [...x];
+  return { t, y, width: 1.5, points: true };
+});
+
+const series = (x: Series, yOffset = 0): PlotDrawer => ({ctx, xs, ys}) => {
+  const {t: dx, y: dy, color = '#2965CC', width = 1, points = false} = x;
+  const N = dx.length;
+  if (points) {
+    ctx.fillStyle = color;
+    for (let i = 1; i <= N; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(xs(dx[i]), ys(dy[i]) + yOffset, width, width, 0, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  } else {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(xs(dx[0]), ys(dy[0]) + yOffset);
+    for (let i = 1; i <= N; i += 1) {
+      ctx.lineTo(xs(dx[i]), ys(dy[i]) + yOffset);
+    }
+    ctx.stroke();
+  }
+};
+
+const PointDistPlot = (url: string, index: number, mean: number, standardDeviation: number) => delayedComponent(fetchLf32(url).then(x => {
+  const scaleFactor = 1 / (standardDeviation * Math.sqrt(2 * Math.PI));
+  const data = seriesFromUrl(url);
+  const xlim = data.then(x => limits(x.t));
+  return Plot2D(deferred(xlim), just([-.5 * scaleFactor, 1.5 * scaleFactor] as const), noop, noop, {
+    title: `Unscented transform (sim #${index})`,
+    xLabel: 'Information gain',
+    yLabel: 'Probability density',
+    showXAxis: true,
+    drawers: [
+      just(gaussianLine(mean, standardDeviation, '#0099cc')),
+      deferred(data.then(series)),
+    ],
+  });
+}));
+
+const pointDistPlotU =
+  (url: string, index: number, mean: number, standardDeviation: number) =>
+    addWindow(
+      SimpleWindow("Plot", PointDistPlot(url, index, mean, standardDeviation)),
+      {x: 500, y: 500});
+
+const pointDistPlot = (index: number, mean: number, standardDeviation: number) =>
+  pointDistPlotU(`http://localhost/uextrap/igain-${index}.lf32`, index, mean, standardDeviation);
+
+pointDistPlot(1,   30583, 62082.6 );
+pointDistPlot(2, 8475.04, 15716.2 );
+pointDistPlot(3, 5702.17, 10019.5 );
+pointDistPlot(4, 999.191, 1914.16 );
+pointDistPlot(5, 280.813, 566.641 );
+pointDistPlot(6, 163.164, 315.901 );
+pointDistPlot(7, 103.939, 198.106 );
+pointDistPlot(8, 84.6724, 152.158 );
+
+const deferredDrawer = (x: Stream<PlotDrawer>): PlotDrawer => {
+  let latest: PlotDrawer | undefined;
+  return ctx => latest && latest(ctx);
+}
+
+const arange = (n: number) => Array(n).fill(0).map((_, i) => i);
+
+const estimateColors = [
+  '#88bb00',
+  '#0088ff',
+  '#ff0088',
+];
+
+/**
+ * Plot for single Monte Carlo MCIG case.
+ *
+ * @param idx Which MCIG sim to show.
+ */
+const MonteCarloPlot = (idx: number, nUkfs: number): Component => {
+
+  const mleDist = fetchLf32(`http://localhost/mcig-${idx}/dist.lf32`);
+  const mleDrawer = mleDist.then(
+    ([mean, std]) => gaussianLine(mean, std, '#00f', true));
+  const scaleFactor = mleDist.then(
+    ([_, stdDev]) => 1 / (stdDev * Math.sqrt(2 * Math.PI)));
+  const yLim = scaleFactor.then(sf => [-.25 * sf, 1.75 * sf] as const);
+
+  const data = fetchLf32(`http://localhost/mcig-${idx}/igain.lf32`).then(x => {
+    const y = [...x.map(_ => 0)];
+    const t = [...x];
+    return { t, y, width: 1.5, points: true };
+  });
+  const xlim = data.then(x => limits(x.t));
+
+  const nBuckets = 50;
+  const histogram = data.then((x): PlotDrawer => {
+    const n = x.t.length;
+    const min = x.t[0];
+    const max = x.t[n - 1];
+    const counts = Array(nBuckets).fill(0);
+    let i = 0;
+    for (let k = 0; k < nBuckets; k += 1) {
+      let nextBoundary = min + (k + 1) / nBuckets * (max - min);
+      while (x.t[i] < nextBoundary)
+        i += 1;
+      counts[k] = i;
+    }
+    // Increment the last bucket to account for the last point, which will
+    // never be counted otherwise.
+    counts[nBuckets - 1] += 1;
+    for (let k = nBuckets - 1; k > 0; k -= 1)
+      counts[k] -= counts[k - 1];
+    const bucketWidth = 1 / nBuckets * (max - min);
+    return ({ctx, top, bottom, left, right, xMin, xMax, yMin, yMax}) => {
+      const rectHeightScale = (bottom - top) / (n * bucketWidth * (yMax - yMin));
+      ctx.fillStyle = 'rgba(200, 100, 0, 0.5)';
+      let rectWidth = bucketWidth / (xMax - xMin) * (right - left);
+      for (let k = 0; k < nBuckets; k += 1) {
+        const bX = left + ((min + k / nBuckets * (max - min)) - xMin) / (xMax - xMin) * (right - left);
+        const bY = top + (0 - yMax) / (yMin - yMax) * (bottom - top);
+        const bHeight = rectHeightScale * counts[k];
+        ctx.fillRect(bX, bY - bHeight, rectWidth, bHeight);
+      }
+    };
+  });
+
+  // Fetch all the UKF estimates.
+  const ukfDrawers = arange(nUkfs).map(i => deferred(
+    fetchLf32(`http://localhost/mcig-${idx}/udist-${i}.lf32`).then(
+      ([w0, mean, std]) => gaussianLine(mean, std, estimateColors[i]))));
+
+  const plot = Plot2D(deferred(xlim), deferred(yLim), noop, noop, {
+    title: `Orbit ${idx}`,
+    xLabel: 'Information gain (kb)',
+    yLabel: 'Probability density',
+    showXAxis: true,
+    xAxisScale: 1 / (1000 * Math.LN2),
+    yAxisScale: 1000 * Math.LN2,
+    drawers: [
+      deferred(data.then(d => series(d, 8))),
+      deferred(histogram),
+      ...ukfDrawers,
+      deferred(mleDrawer),
+    ],
+  });
+
+  return plot;
+};
+
+/**
+ * Summary of Monte Carlo MCIG sim.
+ */
+const MonteCarloSummary = (): Component => {
+  return divr(
+    style({
+      backgroundColor: 'white',
+      height: '100%',
+      width: '100%',
+    }),
+    children(
+      divr(
+        style({ height: '33%' }),
+        children(MonteCarloPlot(1, 3))),
+      divr(
+        style({ height: '33%' }),
+        children(MonteCarloPlot(2, 3))),
+      divr(
+        style({ height: '33%' }),
+        children(MonteCarloPlot(3, 3))),
+    ),
+  );
+};
+
+const CorrelationPlot = (): Component => {
+  const data = fetchLf32(`http://localhost/truth-corr/corr.lf32`).then(data => {
+    const ig: number[] = [];
+    const err: number[] = [];
+    for (let i = 0; i < data.length; i += 2) {
+      ig.push(data[i]);
+      err.push(data[i + 1]);
+    }
+    return series({ t: ig, y: err, points: true, color: '#0088ff' });
+  });
+
+
+  const [xlim, setXlim] = state([190000, 195000] as const);
+  const [ylim, setYlim] = state([34800, 35200] as const);
+  return Plot2D(xlim, ylim, setXlim, setYlim, {
+    xLabel: 'Information gain (kb)',
+    yLabel: 'Error (m³/s²)',
+    xAxisScale: 1 / (1000 * Math.LN2),
+    drawers: [
+      deferred(data),
+    ],
+  });
+};
+
+{
+  const height = 0.4;
+  const plot = Plot2D(just([0, 20] as const), just([-.2 * height, 1.2 * height] as const), noop, noop, {
+    title: 'Predicted value',
+    xLabel: 'Value',
+    yLabel: 'Probability density',
+    showXAxis: true,
+    drawers: [
+      just(gaussianLine(5.5, 3, '#ffaa00')),
+      just(gaussianLine(6, 1, '#0099cc')),
+    ],
+  });
+  const win = SimpleWindow("Plot", plot);
+  addWindow(win, {x: 500, y: 500});
+}
+
+addWindow(SimpleWindow("Monte Carlo", MonteCarloSummary()), {x: 100, y: 100, width: 1000, height: 700});
+addWindow(SimpleWindow("Correlation", CorrelationPlot()), {x: 100, y: 100, width: 600, height: 400});
+
+// filterErrorPlot('extrap', 'c00', 'C₀₀ (µ)');
+// filterErrorPlot('extrap', 'c20', 'C₂₀');
+// filterErrorPlot('extrap', 'c21', 'C₂₁');
+// filterErrorPlot('extrap', 'c22', 'C₂₂');
+// filterErrorPlot('extrap', 's21', 'S₂₁');
+// filterErrorPlot('extrap', 's22', 'S₂₂');
+// filterErrorPlot('extrap', 'pos', 'Position', {
+//   yAxisScale: 1,
+//   yLabel: 'Position error [m]',
+//   xMin: 0,
+//   xMax: 4 * 86400,
+//   showUncertainty: false,
+// });
+// scalarResidualPlot('posonly', 'pos', 'Position residual');
+
+// Orbit period hard-coded based on mu and initial sma.
+const finalStatisticsWindow = 75241.6809991484;
 
 function scalarResidualPlot(sim: string, vari: string, title: string) {
   fetchLf32(`http://localhost/${sim}/res-${vari}.lf32`).then(x => {
@@ -1180,60 +1539,113 @@ function scalarResidualPlot(sim: string, vari: string, title: string) {
     const n = x.length / 2;
     const t: number[] = [];
     const v: number[] = [];
+
+    // stuff for final statistics
+    const fsStart = x[2 * (n - 1)] - finalStatisticsWindow;
+    let fsCount = 0;
+    let fsValMean = 0;
+    let fsValMom2 = 0;
+
     for (let i = 0; i < n; i += 1) {
       const time = x[2 * i];
       const val = x[2 * i + 1];
       t.push(time);
       v.push(val);
-    }
 
-    const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
-      just({ t, y: v, width: 1.5 }),
-    ], {
+      if (time >= fsStart) {
+        fsCount += 1;
+        const mix = 1 / fsCount;
+        fsValMean += mix * (val - fsValMean);
+        fsValMom2 += mix * (val * val - fsValMom2);
+      }
+    }
+    const fsValStd = fsValMom2 - fsValMean * fsValMean;
+
+    const plot = Plot2D(xlim, ylim, setXlim, setYlim, {
       title,
       xLabel: 'Time [d]',
       yLabel: 'Residual [m]',
       showXAxis: true,
       xAxisScale: 1/86400,
+      legend: [
+        `µ = ${fsValMean.toPrecision(4)}, σ = ${fsValStd.toPrecision(4)}`,
+      ],
+      drawers: [
+        just(series({ t, y: v, width: 1.5 })),
+      ]
     });
     const win = SimpleWindow("Plot", plot);
     addWindow(win, {x: 500, y: 500});
   });
 }
 
-function filterErrorPlot(sim: string, vari: string, title: string) {
-  const finalStatisticsWindow = 86400;
-
-
+function filterErrorPlot(sim: string, vari: string, title: string, {
+  yAxisScale = 2.2406667455596465e-06,
+  yLabel = 'Relative error [µ]',
+  xMin = 0,
+  xMax = 10 * 86400,
+  yMin = -21573.9324,
+  yMax = 21573.9324,
+  showUncertainty = true,
+} = {}) {
   fetchLf32(`http://localhost/${sim}/error-${vari}.lf32`).then(x => {
-    const [xlim, setXlim] = state([0, 11 * 86400] as Limits);
-    const [ylim, setYlim] = state([-111573.9324, 111573.9324] as Limits);
+    const [xlim, setXlim] = state([xMin, xMax] as Limits);
+    const [ylim, setYlim] = state([yMin, yMax] as Limits);
     const n = x.length / 3;
     const t: number[] = [];
     const v: number[] = [];
     const filtError: number[] = [];
     const negFiltError: number[] = [];
+
+    // stuff for final statistics
+    const fsStart = x[3 * (n - 1)] - finalStatisticsWindow;
+    let fsCount = 0;
+    let fsMeanMean = 0;
+    let fsMeanMom2 = 0;
+    let fsVarMean = 0;
+    let fsVarMom2 = 0;
+
     for (let i = 0; i < n; i += 1) {
       const time = x[3 * i];
       const err = x[3 * i + 1];
       const unc = x[3 * i + 2];
       t.push(time);
       v.push(err);
-      filtError.push(+unc);
+      filtError.push(unc);
       negFiltError.push(-unc);
+
+      if (time >= fsStart) {
+        fsCount += 1;
+        const mix = 1 / fsCount;
+        fsMeanMean += mix * (err - fsMeanMean);
+        fsMeanMom2 += mix * (err * err - fsMeanMom2);
+        fsVarMean += mix * (unc - fsVarMean);
+        fsVarMom2 += mix * (unc * unc - fsVarMom2);
+      }
+    }
+    const fsMeanStd = fsMeanMom2 - fsMeanMean * fsMeanMean;
+    const fsVarStd = fsVarMom2 - fsVarMean * fsVarMean;
+
+    const drawers: Stream<PlotDrawer>[] = [just(series({ t, y: v, width: 1.5 }))];
+    if (showUncertainty) {
+      drawers.push(
+        just(series({ t, y: filtError, color: 'rgba(41, 101, 204, 0.5)' })),
+        just(series({ t, y: negFiltError, color: 'rgba(41, 101, 204, 0.5)' })),
+      );
     }
 
-    const plot = Plot2D(xlim, ylim, setXlim, setYlim, [
-      just({ t, y: v, width: 1.5 }),
-      just({ t, y: filtError, color: 'rgba(41, 101, 204, 0.5)' }),
-      just({ t, y: negFiltError, color: 'rgba(41, 101, 204, 0.5)' }),
-    ], {
+    const plot = Plot2D(xlim, ylim, setXlim, setYlim, {
       title,
       xLabel: 'Time [d]',
-      yLabel: 'Relative error [µ]',
+      yLabel,
       showXAxis: true,
       xAxisScale: 1/86400,
-      yAxisScale: 1/446295.7296,
+      yAxisScale,
+      drawers,
+      legend: [
+        `Error: µ = ${fsMeanMean.toPrecision(4)}, σ = ${fsMeanStd.toPrecision(4)}`,
+        `Est. std.: µ = ${fsVarMean.toPrecision(4)}, σ = ${fsVarStd.toPrecision(4)}`,
+      ],
     });
     const win = SimpleWindow("Plot", plot);
     addWindow(win, {x: 500, y: 500});
@@ -1243,8 +1655,9 @@ function filterErrorPlot(sim: string, vari: string, title: string) {
 (window as any).plot = function(ns: number[]) {
   const [xlim, setXlim] = state([0, 10] as Limits);
   const [ylim, setYlim] = state([-2, 2] as Limits);
-  const plot = Plot2D(xlim, ylim, setXlim, setYlim, ns.map(dada), {
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, {
     title: conn.quantityName(ns[0] || 0).stream,
+    drawers: ns.map(dada),
   });
   const win = SimpleWindow("Custom", plot);
   addWindow(win);
@@ -1275,8 +1688,11 @@ const rateLimit = <T>(s: Stream<T>): Stream<T> => h => {
 (window as any).plot2 = function(x: number, y: number) {
   const [xlim, setXlim] = state([0, 1] as Limits);
   const [ylim, setYlim] = state([0, 1] as Limits);
-  const plot = Plot2D(xlim, ylim, setXlim, setYlim, [rateLimit(naiveDada2(x, y))], {
+  const plot = Plot2D(xlim, ylim, setXlim, setYlim, {
     title: map(zip([conn.quantityName(x).stream, conn.quantityName(y).stream]), ([x, y]) => `${y} vs. ${x}`),
+    drawers: [
+      rateLimit(naiveDada2(x, y)),
+    ],
   });
   const win = SimpleWindow("Custom", plot);
   addWindow(win);

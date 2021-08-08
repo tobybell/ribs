@@ -36,6 +36,9 @@ export function mutableSet<T>(): [SetStream<T>, SetHandler<T>] {
   ];
 }
 
+/* Add x to s, as a temporary. */
+const setAdd = <T>(s: SetHandler<T>, x: T) => (s.add(x), () => s.remove(x));
+
 export function set2arr<T>(x: SetStream<T>, cmp: (a: T, b: T) => number): ArrayStream<T> {
   return h => {
     let arr: T[] = [];

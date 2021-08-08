@@ -257,3 +257,9 @@ export function sample<T, S>(f: Stream<T>, init?: S): T | S | undefined {
   f(x => val = x)();
   return val;
 }
+
+export const deferred = <T>(p: Promise<T>): Stream<T> => h => {
+  let valid = true;
+  p.then(x => valid && h(x));
+  return () => valid = false;
+};

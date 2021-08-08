@@ -62,21 +62,25 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
   return { send, close };
 }
 
+/** Create a effect from a mutable set of effects. */
 const temporarySet = <T>(s: SetStream<Temporary<T>>): Temporary<T> => x => {
   let us = new Map<Temporary<T>, Cleanup>();
-  return s({
-    init(a) {
-      us.forEach(u => u());
-      a.forEach(t => us.set(t, t(x)));
-    },
-    add(t) {
-      us.set(t, t(x));
-    },
-    remove(t) {
-      us.get(t)!();
-      us.delete(t);
-    },
-  });
+  return cleanup(
+    s({
+      init(a) {
+        us.forEach(u => u());
+        a.forEach(t => us.set(t, t(x)));
+      },
+      add(t) {
+        us.set(t, t(x));
+      },
+      remove(t) {
+        us.get(t)!();
+        us.delete(t);
+      },
+    }),
+    () => us.forEach(u => u()),
+  );
 };
 
 export function connect(): ServerContent {

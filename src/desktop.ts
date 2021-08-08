@@ -52,11 +52,11 @@ const bottomRightDragger = (h: Handler<MouseEvent>) =>
 
 function windowFrame(
   frame: Stream<Frame>,
-  zIndex: Stream<number>,
   resize: WindowHandles,
   content: Component,
   focus: Stream<void>,
-  onFocus?: Thunk): Component {
+  onFocus: Thunk,
+  maxZIndex: Ref<number>): Component {
   return r => {
     const debts = [];
     const div = document.createElement('div');
@@ -68,9 +68,6 @@ function windowFrame(
       style.width = `${f.width}px`;
       style.height = `${f.height}px`;
     }));
-    debts.push(zIndex(i => {
-      style.zIndex = `${i}`;
-    }));
     debts.push(render(content, div));
     div.appendChild(topDragger(resize.top));
     div.appendChild(topLeftDragger(resize.topLeft));
@@ -80,17 +77,12 @@ function windowFrame(
     div.appendChild(bottomDragger(resize.bottom));
     div.appendChild(leftDragger(resize.left));
     div.appendChild(rightDragger(resize.right));
-    onFocus && div.addEventListener('mousedown', onFocus, true);
+    div.addEventListener('mousedown', onFocus);
 
-    // Whenever we get focused, move ourselves to the end of our parent?
+    // Whenever we get focused, move ourselves to the top.
+    style.zIndex = `${maxZIndex.value++}`;
     debts.push(focus(() => {
-      // This is a sort of temporary hack to deal with the fact that some click
-      // handlers get disrupted when we call `appendChild`. If we got rid of all
-      // `click` events and just turned them into `mousedown`/`mouseup` events,
-      // this might not be necessary.
-      if (div !== div.parentNode?.lastChild) {
-        div.parentNode?.appendChild(div);
-      }
+      style.zIndex = `${maxZIndex.value++}`;
     }));
 
     debts.push(mount(div, r));
@@ -228,15 +220,20 @@ const desktopBackground = div({
   ])),
 ]);
 
-export const desktop = (env: WindowStream, mainMenu: Menu): Component => r => {
-  return div({
-    backgroundColor: '#000000',
-    width: '100vw',
-    height: '100vh',
-  }, [MenuBar(mainMenu), desktopBackground], [
-    box => env(x => {
-      const frame = windowFrame(x.frame, x.zIndex, x.handles, x.content, x.focuses, x.focus);
-      x.close(render(frame, box));
-    }),
-  ])(r);
+type Ref<T> = { value: T };
+
+export const desktop = (env: WindowStream, mainMenu: Menu): Component => {
+  const maxZIndex = { value: 0 };
+  return r => {
+    return div({
+      backgroundColor: '#000000',
+      width: '100vw',
+      height: '100vh',
+    }, [MenuBar(mainMenu), desktopBackground], [
+      box => env(x => {
+        const frame = windowFrame(x.frame, x.handles, x.content, x.focuses, x.focus, maxZIndex);
+        x.close(render(frame, box));
+      }),
+    ])(r);
+  };
 }
