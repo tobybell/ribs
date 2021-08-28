@@ -1,5 +1,5 @@
-import { Handler } from "./stream-stuff";
-import { Cleanup } from "./temporary-stuff";
+import { Handler } from './stream-stuff';
+import { Cleanup } from './temporary-stuff';
 
 type RawStream<Handler> = (h: Handler) => Cleanup;
 

@@ -1,4 +1,4 @@
-import { Handler, map, Stream } from "./stream-stuff";
+import { Handler, map, Stream } from './stream-stuff';
 
 export type AnimatableStream<T> = Stream<[T, boolean]>;
 export type AnimatableHandler<T> = Handler<[T, boolean]>;

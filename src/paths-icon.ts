@@ -1,6 +1,6 @@
-import { Component, mount } from "./component";
-import { Handler } from "./stream-stuff";
-import { cleanup, Temporary } from "./temporary-stuff";
+import { Component, mount } from './component';
+import { Handler } from './stream-stuff';
+import { cleanup, Temporary } from './temporary-stuff';
 
 export type IconPath = [number, string];
 export type IconDescriptor = [number, number, IconPath[]];

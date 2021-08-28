@@ -1,15 +1,15 @@
-import { Component, domEvent, mount, render } from "./component";
-import { contextMenu, openMenuIn } from "./context-menu";
-import { div } from "./div";
-import { elem } from "./elem";
-import { Frame } from "./frame";
-import { Thunk } from "./function-stuff";
-import { appleMenuIcon } from "./icons";
-import { Menu, menu, menuItem, menuSeparator } from "./menu";
-import { oneHot } from "./one-hot";
-import { Handler, map, state, Stream, trigger } from "./stream-stuff";
-import { cleanup } from "./temporary-stuff";
-import { WindowHandles, WindowStream } from "./window-stuff";
+import { Component, domEvent, mount, render } from './component';
+import { contextMenu, openMenuIn } from './context-menu';
+import { children, divr, style } from './div';
+import { elem } from './elem';
+import { Frame } from './frame';
+import { Thunk } from './function-stuff';
+import { appleMenuIcon } from './icons';
+import { Menu, menu, menuItem, menuSeparator } from './menu';
+import { oneHot } from './one-hot';
+import { Handler, map, state, Stream, trigger } from './stream-stuff';
+import { cleanup } from './temporary-stuff';
+import { WindowHandles, WindowStream } from './window-stuff';
 
 function dragger(top: string, bottom: string, left: string, right: string, width: string, height: string, cursor: string, onMouseDown: Handler<MouseEvent>) {
   const div = elem('div');
@@ -176,14 +176,15 @@ const MenuBar = (mainMenu: Menu): Component => r => {
     ...items.map((x, i) => domEvent('mouseenter', () => setActiveItem(i))(x.children[0])),
   )));
 
-  us.push(div({
+  us.push(divr(style({
     height: '22px',
     display: 'flex',
     flexFlow: 'row nowrap',
     paddingLeft: '10px',
     zIndex: '100',
-  }, [
-    div({
+  }),
+  children(
+    divr(style({
       position: 'absolute',
       left: '0',
       right: '0',
@@ -191,19 +192,20 @@ const MenuBar = (mainMenu: Menu): Component => r => {
       bottom: '0',
       zIndex: '1',
       backgroundColor: '#1b1a1e',
-    }),
+    })),
     ...items,
-  ])(r));
+  ))(r));
 
   return cleanup(...us);
 };
 
-const desktopBackground = div({
-  background: 'url(https://getwallpapers.com/wallpaper/full/6/0/4/916246-gorgerous-mac-os-x-desktop-backgrounds-2880x1800-for-1080p.jpg)',
-  backgroundSize: 'cover',
-  width: '100%',
-  height: '100%',
-}, [], [
+const desktopBackground = divr(
+  style({
+    background: 'url(https://getwallpapers.com/wallpaper/full/6/0/4/916246-gorgerous-mac-os-x-desktop-backgrounds-2880x1800-for-1080p.jpg)',
+    backgroundSize: 'cover',
+    width: '100%',
+    height: '100%',
+  }),
   contextMenu(menu([
     menuItem({ label: 'New Folder' }),
     menuSeparator,
@@ -218,22 +220,22 @@ const desktopBackground = div({
     menuItem({ label: 'Clean Up By' }),
     menuItem({ label: 'Show View Options' }),
   ])),
-]);
+);
 
 type Ref<T> = { value: T };
 
 export const desktop = (env: WindowStream, mainMenu: Menu): Component => {
   const maxZIndex = { value: 0 };
-  return r => {
-    return div({
+  return divr(
+    style({
       backgroundColor: '#000000',
       width: '100vw',
       height: '100vh',
-    }, [MenuBar(mainMenu), desktopBackground], [
-      box => env(x => {
-        const frame = windowFrame(x.frame, x.handles, x.content, x.focuses, x.focus, maxZIndex);
-        x.close(render(frame, box));
-      }),
-    ])(r);
-  };
-}
+    }),
+    children(MenuBar(mainMenu), desktopBackground),
+    box => env(x => {
+      const frame = windowFrame(x.frame, x.handles, x.content, x.focuses, x.focus, maxZIndex);
+      x.close(render(frame, box));
+    }),
+  );
+};

@@ -1,15 +1,15 @@
-import { Component, mount } from "../component";
-import { contextMenu } from "../context-menu";
-import { checkbox, radio, select, slider } from "../controls";
-import { div } from "../div";
-import { formSection, formSeparator } from "../form";
-import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from "../icons";
-import { menu, menuItem, menuSeparator } from "../menu";
-import { oneHot } from "../one-hot";
-import { state, Sync } from "../state";
-import { Handler, just, map, Stream, streamComp } from "../stream-stuff";
-import { toolbarBar } from "../toolbar-bar";
-import { win, windowPane } from "../window-stuff";
+import { Component, mount } from '../component';
+import { contextMenu } from '../context-menu';
+import { checkbox, radio, select, slider } from '../controls';
+import { divr, style, children } from '../div';
+import { formSection, formSeparator } from '../form';
+import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumentsFolderIcon, sidebarGenericFolderIcon, sidebariCloudIcon, sidebarMoviesFolderIcon } from '../icons';
+import { menu, menuItem, menuSeparator } from '../menu';
+import { oneHot } from '../one-hot';
+import { state, Sync } from '../state';
+import { Handler, just, map, Stream, streamComp } from '../stream-stuff';
+import { toolbarBar } from '../toolbar-bar';
+import { win, windowPane } from '../window-stuff';
 
 function space(size: number) {
   const div = document.createElement('div');
@@ -18,29 +18,29 @@ function space(size: number) {
 }
 
 function section(title: string, items: Component[]) {
-  return div({
+  return divr(style({
     padding: '6px 0',
     overflow: 'auto',
-  }, [
+  }), children(
     sidebarHeading(title),
     ...items,
-  ]);
+  ));
 }
 
 function sidebarHeading(name: string) {
-  return div({
+  return divr(style({
     display: 'flex',
     alignItems: 'center',
     height: '17px',
     paddingLeft: '9px',
     color: 'rgba(255, 255, 255, 0.62)',
     fontSize: '11px',
-  }, [
+  }), children(
     name,
-  ]);
+  ));
 }
 
-function item({ title, icon, level = 0, active = false, expanded = just(false), onExpand, onCollapse, children }: {
+function item({ title, icon, level = 0, active = false, expanded = just(false), onExpand, onCollapse, children: kids }: {
   title: string;
   level?: number;
   icon?: Component;
@@ -51,44 +51,44 @@ function item({ title, icon, level = 0, active = false, expanded = just(false), 
   children?: any[];
 }) {
   const indent = `${level * 16}px`;
-  const hasChildren = children && children.length > 0;
+  const hasChildren = kids && kids.length > 0;
   const openCaret = caretDownIcon({ onClick: onCollapse });
   const closedCaret = caretRightIcon({ onClick: onExpand });
   const carets = map(expanded, x => hasChildren
     ? x ? openCaret : closedCaret : (r: Node) => mount(space(18), r));
 
-  return div({
+  return divr(style({
     paddingTop: '2px',
     boxSizing: 'border-box',
-  }, [
-    div({
+  }), children(
+    divr(style({
       display: 'flex',
       alignItems: 'center',
       height: '24px',
       paddingLeft: indent,
       color: '#ffffff',
       backgroundColor: active ? 'rgba(255, 255, 255, .17)' : 'transparent',
-    }, [
+    }), children(
       streamComp(carets),
       icon,
       space(5),
       title,
-    ]),
-    div({
+    )),
+    divr(style({
       overflow: 'hidden',
       transition: 'height .2s cubic-bezier(.4,1,.75,.9)',
       height: map(expanded, x => x ? 'auto' : '0'),
-    }, children),
-  ]);
+    }), kids && children(...kids)),
+  ));
 }
 
 function sidebar(expanded: Sync<boolean>) {
-  return div({
+  return divr(style({
     backgroundColor: '#29282a',
     width: '150px',
     borderRight: '1px solid #000000',
     overflow: 'scroll',
-  }, [
+  }), children(
     section('iCloud', [
       item({
         title: 'iCloud Drive',
@@ -120,7 +120,7 @@ function sidebar(expanded: Sync<boolean>) {
     section('Smart Mailboxes', []),
     section('On My Mac', []),
     section('Stanford', []),
-  ]);
+  ));
 }
 
 export const Finder = win(c => {
@@ -129,13 +129,13 @@ export const Finder = win(c => {
   const a = oneHot(which.stream);
   const content = windowPane([
     toolbarBar(c.handles.middle, c.close),
-    div({
+    divr(style({
       flex: '1 0 0',
       display: 'flex',
       alignItems: 'stretch',
-    }, [
+    }), children(
       sidebar(expanded),
-      div({ flex: '1 0 0' }, [
+      divr(style({ flex: '1 0 0' }), children(
         formSection(radio(a(0), () => which.set(0))),
         formSection(radio(a(1), () => which.set(1))),
         formSection(radio(a(2), () => which.set(2))),
@@ -144,8 +144,8 @@ export const Finder = win(c => {
         formSection(checkbox(state(true))),
         select(),
         slider(state(.5)),
-      ]),
-    ]),
+      )),
+    )),
   ], [
     contextMenu(menu([
       menuItem({ label: 'Back' }),

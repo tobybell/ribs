@@ -1,4 +1,4 @@
-import { Handler } from "./stream-stuff";
+import { Handler } from './stream-stuff';
 
 export type Quantity = number;
 export type Time = number;

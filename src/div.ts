@@ -1,14 +1,14 @@
-import { Component, mount, render } from "./component";
-import { elem } from "./elem";
-import { Stream } from "./stream-stuff";
-import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
+import { Component, mount, render } from './component';
+import { elem } from './elem';
+import { Stream } from './stream-stuff';
+import { cleanup, Cleanup, Temporary } from './temporary-stuff';
 
 export type ElementThing = HTMLElement | SVGSVGElement | Component | string | undefined | null | false;
 type StreamableCSS = {[K in keyof CSSStyleDeclaration]?: string | Stream<string>};
 
 const exists = <T>(x: T | undefined): x is T => !!x;
 
-const elemRawComponent =
+const element =
   <K extends keyof HTMLElementTagNameMap>(e: K) =>
   (...effects: (Temporary<HTMLElementTagNameMap[K]> | undefined)[]): Component =>
   r => {
@@ -43,7 +43,7 @@ export function style(decl: StreamableCSS): Temporary<ElementCSSInlineStyle> {
     const us: Cleanup[] = [];
     keys.forEach(k => {
       const v = decl[k];
-      if (typeof v === "string") {
+      if (typeof v === 'string') {
         target[k] = v;
       } else if (v) {
         us.push(v(x => target[k] = x));
@@ -53,22 +53,11 @@ export function style(decl: StreamableCSS): Temporary<ElementCSSInlineStyle> {
   }
 }
 
-function elemComponent<K extends keyof HTMLElementTagNameMap>(e: K) {
-  const comp = elemRawComponent(e);
-  return (
-    decl: Partial<StreamableCSS>,
-    child: ElementThing[] = [],
-    effects: (Temporary<HTMLElementTagNameMap[K]> | undefined)[] = [],
-  ) => comp(style(decl), children(...child), ...effects);
-}
+export const divr = element('div');
 
-export const div = elemComponent("div");
+export const span = element('span');
 
-export const divr = elemRawComponent("div");
-
-export const span = elemRawComponent("span");
-
-export const rawInput = elemRawComponent("input");
+export const rawInput = element('input');
 
 export const text = (s: Stream<string>): Component => r => {
   const n = document.createTextNode('');

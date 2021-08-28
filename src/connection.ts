@@ -1,13 +1,13 @@
-import { AddOnlySet, addOnlySet } from "./add-only-set";
-import { Quantity, ValuePair } from "./data-stuff";
-import { Thunk } from "./function-stuff";
-import { posaphore } from "./posaphore";
-import { protocolReader } from "./protocol-reader";
-import { ProtocolWriter, protocolWriter } from "./protocol-writer";
-import { mutableSet, SetStream } from "./set-stuff";
-import { state, Sync } from "./state";
-import { enable, Handler } from "./stream-stuff";
-import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
+import { AddOnlySet, addOnlySet } from './add-only-set';
+import { Quantity, ValuePair } from './data-stuff';
+import { Thunk } from './function-stuff';
+import { posaphore } from './posaphore';
+import { protocolReader } from './protocol-reader';
+import { ProtocolWriter, protocolWriter } from './protocol-writer';
+import { mutableSet, SetStream } from './set-stuff';
+import { state, Sync } from './state';
+import { enable, Handler } from './stream-stuff';
+import { cleanup, Cleanup, Temporary } from './temporary-stuff';
 
 function enabler(h: Handler<boolean>): Temporary<void> {
   return () => (h(true), () => h(false));
@@ -28,7 +28,7 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
   let wc: Cleanup | undefined;
   const init = () => {
     if (done) return;
-    ws = new WebSocket("ws://localhost:3000");
+    ws = new WebSocket('ws://localhost:3000');
     ws.onopen = _ => {
       wc = whileConnected();
     }
@@ -37,13 +37,13 @@ function serverConnection(handle: Handler<ArrayBuffer>, whileConnected: Temporar
       if (data instanceof Blob) data.arrayBuffer().then(x => {
         handle(x);
       });
-      else console.error("Unexpected WebSocket data", data);
+      else console.error('Unexpected WebSocket data', data);
     };
     ws.onclose = _ => {
       wc?.();
       wc = undefined;
       if (done) return;
-      console.warn("Socket closed! Trying to reconnect...");
+      console.warn('Socket closed! Trying to reconnect...');
       setTimeout(init, 20000);
     };
   };
@@ -126,7 +126,7 @@ export function connect(): ServerContent {
   mce.add(subQuantities);
 
   /**
-   * This is an involved function. It creates a "managed cache" of generic
+   * This is an involved function. It creates a 'managed cache' of generic
    * values that come from the server, where each value is some property of a
    * quantity---for example, the name of a quantity, or the data for a
    * quantity. The resulting cache is used to automatically subscribe and
@@ -178,7 +178,7 @@ export function connect(): ServerContent {
   }
 
   const quantityNames = makeManaged({
-    makeRaw: () => state("Unknown"),
+    makeRaw: () => state('Unknown'),
     makeManaged: q => ({
       set: (x: string) => writer.setQuantityName(q, x),
     }),

@@ -1,5 +1,5 @@
-import { blank } from "./blank";
-import { Handler, Stream, stream } from "./stream-stuff";
+import { blank } from './blank';
+import { Handler, Stream, stream } from './stream-stuff';
 
 export interface Readable<T> {
   value: T;

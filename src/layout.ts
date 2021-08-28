@@ -1,14 +1,14 @@
-import { div, ElementThing, style } from "./div";
-import { Temporary } from "./temporary-stuff";
+import { children, divr, ElementThing, style } from './div';
+import { Temporary } from './temporary-stuff';
 
-export const row = (children: ElementThing[], fx?: Temporary<HTMLDivElement>[]) => div({
-  display: "flex",
-  flexFlow: "row nowrap",
-  alignItems: "center",
-}, children, fx);
+export const row = (kids: ElementThing[], fx?: Temporary<HTMLDivElement>[]) => divr(style({
+  display: 'flex',
+  flexFlow: 'row nowrap',
+  alignItems: 'center',
+}), children(...kids), ...fx || []);
 
 export const rowF = style({
-  display: "flex",
+  display: 'flex',
 });
 
-export const space = (size: number) => div({ flex: `0 0 ${size}px` });
+export const space = (size: number) => divr(style({ flex: `0 0 ${size}px` }));

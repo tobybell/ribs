@@ -1,7 +1,7 @@
-import { ArrayStream } from "./array-stuff";
-import { binsert } from "./bsearch";
-import { Handler } from "./stream-stuff";
-import { Cleanup } from "./temporary-stuff";
+import { ArrayStream } from './array-stuff';
+import { binsert } from './bsearch';
+import { Handler } from './stream-stuff';
+import { Cleanup } from './temporary-stuff';
 
 export interface SetHandler<T> {
   init: Handler<Set<T>>;

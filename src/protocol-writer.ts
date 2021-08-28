@@ -1,7 +1,7 @@
 /** File for actual data stuff. */
 
-import { Quantity, Time, Value, ValuePair } from "./data-stuff";
-import { Handler } from "./stream-stuff";
+import { Quantity, Time, Value, ValuePair } from './data-stuff';
+import { Handler } from './stream-stuff';
 
 type Message = ArrayBuffer;
 type MessageHandler = Handler<Message>;

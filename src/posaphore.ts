@@ -1,6 +1,6 @@
-import { Thunk } from "./function-stuff";
-import { Handler, map, Stream, stream } from "./stream-stuff";
-import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
+import { Thunk } from './function-stuff';
+import { Handler, map, Stream, stream } from './stream-stuff';
+import { cleanup, Cleanup, Temporary } from './temporary-stuff';
 
 /**
  * A posaphore is an object that wraps some temporary `f`. The wrapped

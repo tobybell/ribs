@@ -1,11 +1,11 @@
-import { clickControl, hoverEffect } from "./click-control";
-import { Component, domEvent } from "./component";
-import { contextMenu } from "./context-menu";
-import { children, div, span, style } from "./div";
-import { columnsIcon, galleryIcon, iconsIcon, listIcon, searchIcon, windowCloseIcon, windowMaximizeIcon, windowMinimizeIcon } from "./icons";
-import { menu, menuItem, menuSeparator } from "./menu";
-import { Icon } from "./paths-icon";
-import { any, enable, Handler, map, state, Stream } from "./stream-stuff";
+import { clickControl, hoverEffect } from './click-control';
+import { Component, domEvent } from './component';
+import { contextMenu } from './context-menu';
+import { children, divr, span, style } from './div';
+import { columnsIcon, galleryIcon, iconsIcon, listIcon, searchIcon, windowCloseIcon, windowMaximizeIcon, windowMinimizeIcon } from './icons';
+import { menu, menuItem, menuSeparator } from './menu';
+import { Icon } from './paths-icon';
+import { any, enable, Handler, map, state, Stream } from './stream-stuff';
 
 const windowButtons = (close: Handler<never>): Component => r => {
   const [hover, setHover] = state(false);
@@ -22,16 +22,16 @@ const windowButtons = (close: Handler<never>): Component => r => {
   const maxButton = windowButton(
     '#71bf46', '#9ded6f', windowMaximizeIcon, showDetail, clickingMax[1], () => 0);
 
-  return div({
+  return divr(style({
     display: 'flex',
     marginRight: '8px',
-  }, [
+  }), children(
     closeButton,
     minButton,
     maxButton,
-  ], [
-    hoverEffect(setHover),
-  ])(r);
+  ),
+  hoverEffect(setHover),
+  )(r);
 };
 
 const windowButton = (
@@ -44,73 +44,68 @@ const windowButton = (
   const [highlight, setHighlight] = state(false);
   const color = map(highlight, x => x ? highlightColor : defaultColor);
   const content = enable(showDetail, icon({ color: 'black' }));
-  return div({
+  return divr(style({
     height: '12px',
     width: '12px',
     borderRadius: '6px',
     backgroundColor: color,
     marginLeft: '8px',
-  }, [
-    content,
-  ], [
+  }), children(content),
     clickControl(onClick, setHighlight, onClicking),
-  ])(r);
+  )(r);
 };
 
-const windowTitle = (title: string) => div({
+const windowTitle = (title: string) => divr(style({
   flex: '0 1 auto',
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   color: '#b7b7ba',
   overflow: 'hidden',
   cursor: 'default',
-}, [
-  title,
-]);
+}), children(title));
 
 /** Title for representing the name of some user content. Just a bolder
  * typeface. */
-export const contentTitle = (title: string) => div({
-  fontWeight: "600",
-  cursor: "default",
+export const contentTitle = (title: string) => divr(style({
+  fontWeight: '600',
+  cursor: 'default',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
   color: '#a7a7aa',
-}, [title]);
+}), children(title));
 
-const titleBar = (title: string | Component, onClose: Handler<void>) => div({
+const titleBar = (title: string | Component, onClose: Handler<void>) => divr(style({
   display: 'flex',
   height: '22px',
   width: '100%',
   justifyContent: 'space-between',
   alignItems: 'center',
-}, [
+}), children(
   windowButtons(onClose),
   typeof title === 'string' ? windowTitle(title) : title,
-  div({
+  divr(style({
     flex: '0 10000 52px',
     height: '8px',
     minWidth: '8px',
-  }),
-]);
+  })),
+));
 
 export function simpleTitleBar(title: string | Component, windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
-  return div({
+  return divr(style({
     flex: '0 0 auto',
     alignSelf: 'stretch',
     backgroundColor: '#3d3e3f',
     boxShadow: '0 -1px 0 rgba(0, 0, 0, 0.24) inset, 0 -.5px 0 #000 inset',
     overflow: 'scroll',
-  }, [
+  }), children(
     titleBar(title, onClose),
-  ], [
-    domEvent('mousedown', windowDrag),
-  ]);
+  ),
+  domEvent('mousedown', windowDrag));
 }
 
 function toolbar(...items: Component[]) {
-  return div({ display: 'flex', margin: '3px 8px 8px' }, items, [
+  return divr(style({ display: 'flex', margin: '3px 8px 8px' }), children(...items),
     contextMenu(menu([
       menuItem({ label: 'Icon and Text' }),
       menuItem({ label: 'Icon Only' }),
@@ -118,11 +113,11 @@ function toolbar(...items: Component[]) {
       menuSeparator,
       menuItem({ label: 'Customize Toolbar...' }),
     ]))
-  ]);
+  );
 }
 
 function toolbarSearch() {
-  return div({
+  return divr(style({
     backgroundColor: '#636365',
     height: '22px',
     boxSizing: 'border-box',
@@ -134,7 +129,7 @@ function toolbarSearch() {
     color: '#ffffff',
     marginRight: '8px',
     padding: '0 5px',
-  }, [
+  }), children(
     searchIcon(),
     span(
       style({
@@ -144,7 +139,7 @@ function toolbarSearch() {
       }),
       children('Search'),
     ),
-  ]);
+  ));
 }
 
 interface ButtonProps {
@@ -154,7 +149,7 @@ interface ButtonProps {
 }
 
 function toolbarButton({ title, icon, rightIcon }: ButtonProps): Component {
-  return div({
+  return divr(style({
     backgroundColor: '#636365',
     height: '22px',
     boxSizing: 'border-box',
@@ -166,21 +161,21 @@ function toolbarButton({ title, icon, rightIcon }: ButtonProps): Component {
     color: '#ffffff',
     marginRight: '8px',
     padding: '0 5px',
-  }, [
+  }), children(
     icon,
-  ]);
+  ));
 }
 
-const flexibleSpace = div({ flex: '1 0 0' });
+const flexibleSpace = divr(style({ flex: '1 0 0' }));
 
 export function toolbarBar(windowDrag: Handler<MouseEvent>, onClose: Handler<void>) {
-  return div({
+  return divr(style({
     flex: '0 0 auto',
     alignSelf: 'stretch',
     backgroundColor: '#3d3e3f',
     boxShadow: '0 -1px 0 rgba(0, 0, 0, 0.24) inset, 0 -.5px 0 #000 inset',
     overflow: 'scroll',
-  }, [
+  }), children(
     titleBar('Ribs — zsh — Solarized Dark – 98x26', onClose),
     toolbar(
       toolbarButton({icon: iconsIcon()}),
@@ -190,7 +185,7 @@ export function toolbarBar(windowDrag: Handler<MouseEvent>, onClose: Handler<voi
       flexibleSpace,
       toolbarSearch(),
     ),
-  ], [
-    domEvent('mousedown', windowDrag),
-  ]);
+  ),
+  domEvent('mousedown', windowDrag),
+  );
 }

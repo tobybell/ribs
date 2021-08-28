@@ -1,6 +1,6 @@
-import { ArrayStream } from "./array-stuff";
-import { Component, render, renderAt } from "./component";
-import { Cleanup, cleanup, cleanupFrom, Temporary } from "./temporary-stuff";
+import { ArrayStream } from './array-stuff';
+import { Component, render, renderAt } from './component';
+import { Cleanup, cleanup, cleanupFrom, Temporary } from './temporary-stuff';
 
 export function arrayChildren(c: ArrayStream<Component>): Temporary<Node> {
   return n => {
@@ -23,7 +23,7 @@ export function arrayChildren(c: ArrayStream<Component>): Temporary<Node> {
           u();
         },
         move(d, i) {
-          console.error("Move not supported!");
+          console.error('Move not supported!');
         },
       }),
       cleanupFrom(us),

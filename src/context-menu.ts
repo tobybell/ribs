@@ -1,9 +1,9 @@
-import { wait } from "./async-stuff";
-import { append, domEvent, Effect, render } from "./component";
-import { elem } from "./elem";
-import { Thunk } from "./function-stuff";
-import { Menu } from "./menu";
-import { cleanup, Cleanup } from "./temporary-stuff";
+import { wait } from './async-stuff';
+import { append, domEvent, Effect, render } from './component';
+import { elem } from './elem';
+import { Thunk } from './function-stuff';
+import { Menu } from './menu';
+import { cleanup, Cleanup } from './temporary-stuff';
 
 
 function showContextMenu(e: MouseEvent, menu: Menu) {

@@ -1,7 +1,7 @@
-import { domEvent, Effect } from "./component";
-import { noop } from "./function-stuff";
-import { Handler, Stream } from "./stream-stuff";
-import { cleanup, Cleanup } from "./temporary-stuff";
+import { domEvent, Effect } from './component';
+import { noop } from './function-stuff';
+import { Handler, Stream } from './stream-stuff';
+import { cleanup, Cleanup } from './temporary-stuff';
 
 export function hoverEffect(h: Handler<boolean>): Effect {
   return n => {

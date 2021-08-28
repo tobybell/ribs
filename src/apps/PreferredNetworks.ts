@@ -1,13 +1,13 @@
-import { plusMinusButton } from "../add-remove-button";
-import { array, contains } from "../array-stuff";
-import { counter } from "../counter";
-import { formSection } from "../form";
-import { space } from "../layout";
-import { state } from "../state";
-import { Handler, Stream } from "../stream-stuff";
-import { checkboxCell, editableTextCell, field, Field, table, textCell } from "../table";
-import { simpleTitleBar } from "../toolbar-bar";
-import { win, windowPane } from "../window-stuff";
+import { plusMinusButton } from '../add-remove-button';
+import { array, contains } from '../array-stuff';
+import { counter } from '../counter';
+import { formSection } from '../form';
+import { space } from '../layout';
+import { state } from '../state';
+import { Handler, Stream } from '../stream-stuff';
+import { checkboxCell, editableTextCell, field, Field, table, textCell } from '../table';
+import { simpleTitleBar } from '../toolbar-bar';
+import { win, windowPane } from '../window-stuff';
 
 interface Network {
   name: Stream<string>;
@@ -22,10 +22,10 @@ function network(name: string) {
 export const PreferredNetworks = win(c => {
 
   const networks = array([
-    network("Beach House"),
-    network("Astranis5"),
-    network("slive"),
-    network("Samosa"),
+    network('Beach House'),
+    network('Astranis5'),
+    network('slive'),
+    network('Samosa'),
   ]);
 
   const selected = state<Network | undefined>(undefined);
@@ -33,7 +33,7 @@ export const PreferredNetworks = win(c => {
   const hasSelection = contains(networks.stream, selected);
 
   const addNetwork = () => {
-    const n = network("Test" + next());
+    const n = network('Test' + next());
     networks.push(n);
     selected.set(n);
   };
@@ -51,15 +51,15 @@ export const PreferredNetworks = win(c => {
   };
 
   const fields = array<Field<Network>>([
-    field("Network Name", n => editableTextCell({ stream: n.name, set: console.log })),
-    field("Security", () => textCell("WPA/WPA2 Personal")),
-    field("Auto-Join", () => checkboxCell(state(Math.random() >= .5))),
+    field('Network Name', n => editableTextCell({ stream: n.name, set: console.log })),
+    field('Security', () => textCell('WPA/WPA2 Personal')),
+    field('Auto-Join', () => checkboxCell(state(Math.random() >= .5))),
   ]);
 
   const next = counter();
 
   const pane = windowPane([
-    simpleTitleBar("Preferred Networks", c.handles.middle, c.close),
+    simpleTitleBar('Preferred Networks', c.handles.middle, c.close),
     space(12),
     formSection(table(networks.stream, fields.stream, selected)),
     formSection(plusMinusButton(addNetwork, removeSelectedNetwork, hasSelection.stream)),

@@ -1,6 +1,6 @@
-import { noop } from "./function-stuff";
-import { Handler, Stream } from "./stream-stuff";
-import { cleanup, Cleanup, Temporary } from "./temporary-stuff";
+import { noop } from './function-stuff';
+import { Handler, Stream } from './stream-stuff';
+import { cleanup, Cleanup, Temporary } from './temporary-stuff';
 
 export type Component = Temporary<Node>;
 export type Effect = Temporary<Element>;

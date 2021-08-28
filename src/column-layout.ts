@@ -1,4 +1,4 @@
-import { animatable, Animatable, AnimatableStream } from "./animatable";
+import { animatable, Animatable, AnimatableStream } from './animatable';
 
 type Width = number;
 type Offset = number;

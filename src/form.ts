@@ -1,19 +1,19 @@
-import { Component } from "./component";
-import { div, style } from "./div";
-import { row, space } from "./layout";
+import { Component } from './component';
+import { divr, children, style } from './div';
+import { row, space } from './layout';
 
 export function formSection(input: Component) {
-  return div({ padding: "4px 16px", }, [input]);
+  return divr(style({ padding: '4px 16px', }), children(input));
 }
 
 export function labeledSection(label: string, input: Component) {
   return row([
-    div({ color: "white", flex: "0 0 60px" }, [label]),
+    divr(style({ color: 'white', flex: '0 0 60px' }), children(label)),
     space(10),
-    div({ color: "white", flex: "1 0 0" }, [input]),
+    divr(style({ color: 'white', flex: '1 0 0' }), children(input)),
   ], [
     style({
-      padding: "6px 16px",
+      padding: '6px 16px',
     }),
   ]);
 }
@@ -21,16 +21,16 @@ export function labeledSection(label: string, input: Component) {
 export function submitSection(...items: Component[]) {
   return row(items, [
     style({
-      padding: "8px 16px",
-      justifyContent: "flex-end",
+      padding: '8px 16px',
+      justifyContent: 'flex-end',
     }),
   ]);
 }
 
 export function formSeparator() {
-  return div({
-    padding: "12px 16px",
-  }, [
-    div({ background: "#464646", height: "1px", width: "100%" }),
-  ]);
+  return divr(style({
+    padding: '12px 16px',
+  }), children(
+    divr(style({ background: '#464646', height: '1px', width: '100%' })),
+  ));
 }

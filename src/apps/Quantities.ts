@@ -1,14 +1,14 @@
-import { plusMinusButton } from "../add-remove-button";
-import { array, arrayMap, contains } from "../array-stuff";
-import { Quantity } from "../data-stuff";
-import { formSection } from "../form";
-import { space } from "../layout";
-import { ProtocolWriter } from "../protocol-writer";
-import { set2arr, SetStream } from "../set-stuff";
-import { state, Sync } from "../state";
-import { editableTextCell, field, Field, table, textCell } from "../table";
-import { simpleTitleBar } from "../toolbar-bar";
-import { win, windowPane } from "../window-stuff";
+import { plusMinusButton } from '../add-remove-button';
+import { array, arrayMap, contains } from '../array-stuff';
+import { Quantity } from '../data-stuff';
+import { formSection } from '../form';
+import { space } from '../layout';
+import { ProtocolWriter } from '../protocol-writer';
+import { set2arr, SetStream } from '../set-stuff';
+import { state, Sync } from '../state';
+import { editableTextCell, field, Field, table, textCell } from '../table';
+import { simpleTitleBar } from '../toolbar-bar';
+import { win, windowPane } from '../window-stuff';
 
 interface MutableQuantity {
   id: Quantity;
@@ -36,12 +36,12 @@ export const Quantities = (q: SetStream<Quantity>, names: (q: Quantity) => Sync<
   };
 
   const fields = array<Field<MutableQuantity>>([
-    field("ID", q => textCell(`${q.id}`)),
-    field("Name", q => editableTextCell(q.name)),
+    field('ID', q => textCell(`${q.id}`)),
+    field('Name', q => editableTextCell(q.name)),
   ]);
 
   const pane = windowPane([
-    simpleTitleBar("Quantities", c.handles.middle, c.close),
+    simpleTitleBar('Quantities', c.handles.middle, c.close),
     space(12),
     formSection(table(quantities, fields.stream, selected)),
     formSection(plusMinusButton(addQuantity, removeSelectedQuantity, hasSelection.stream)),

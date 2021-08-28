@@ -1,16 +1,16 @@
-import { plusMinusButton } from "../add-remove-button";
-import { array, contains } from "../array-stuff";
-import { button } from "../controls";
-import { ValuePair } from "../data-stuff";
-import { formSection, formSeparator, labeledSection, submitSection } from "../form";
-import { space } from "../layout";
-import { ProtocolWriter } from "../protocol-writer";
-import { state, Sync } from "../state";
-import { Handler, just, map, stream, Stream } from "../stream-stuff";
-import { editableTextCell, Field, field, table } from "../table";
-import { textField, upDownField } from "../text-field";
-import { simpleTitleBar } from "../toolbar-bar";
-import { win, windowPane } from "../window-stuff";
+import { plusMinusButton } from '../add-remove-button';
+import { array, contains } from '../array-stuff';
+import { button } from '../controls';
+import { ValuePair } from '../data-stuff';
+import { formSection, formSeparator, labeledSection, submitSection } from '../form';
+import { space } from '../layout';
+import { ProtocolWriter } from '../protocol-writer';
+import { state, Sync } from '../state';
+import { Handler, just, map, stream, Stream } from '../stream-stuff';
+import { editableTextCell, Field, field, table } from '../table';
+import { textField, upDownField } from '../text-field';
+import { simpleTitleBar } from '../toolbar-bar';
+import { win, windowPane } from '../window-stuff';
 
 type Streams<T> = { [K in keyof T]: Stream<T[K]> };
 type Setters<T> = { [K in keyof T]: Handler<T[K]> };
@@ -107,8 +107,8 @@ export const Emitter = (w: ProtocolWriter) => win(c => {
   });
 
   const fields = array<Field<MutableValuePair>>([
-    field("Time", p => editableTextCell(mapSync(p.syn.time, format, parseF))),
-    field("Value", p => editableTextCell(mapSync(p.syn.value, format, parseF))),
+    field('Time', p => editableTextCell(mapSync(p.syn.time, format, parseF))),
+    field('Value', p => editableTextCell(mapSync(p.syn.value, format, parseF))),
   ]);
 
   const ud = upDownField({
@@ -116,16 +116,16 @@ export const Emitter = (w: ProtocolWriter) => win(c => {
     set: parseI(quantity.set),
   }, incr, decr);
   const pane = windowPane([
-    simpleTitleBar("Emitter", c.handles.middle, c.close),
+    simpleTitleBar('Emitter', c.handles.middle, c.close),
     space(12),
-    labeledSection("Quantity:", ud),
-    labeledSection("Time:", textField(mapSync(time, String, parseF))),
-    labeledSection("Value:", textField(mapSync(value, String, parseF))),
-    submitSection(button(just("Add Point"), addPoint)),
+    labeledSection('Quantity:', ud),
+    labeledSection('Time:', textField(mapSync(time, String, parseF))),
+    labeledSection('Value:', textField(mapSync(value, String, parseF))),
+    submitSection(button(just('Add Point'), addPoint)),
     formSeparator(),
     formSection(table(points.stream, fields.stream, selected)),
     formSection(plusMinusButton(addTablePoint, removeSelectedPoint, hasSelection.stream)),
-    submitSection(button(just("Add Points"), addPoints)),
+    submitSection(button(just('Add Points'), addPoints)),
   ]);
   return pane;
 });

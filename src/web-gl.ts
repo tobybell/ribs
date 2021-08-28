@@ -1,21 +1,21 @@
-import { append, Component, Effect, marker, mount } from "./component";
-import { elem } from "./elem";
-import { noop } from "./function-stuff";
-import { mat4 } from "./mat4";
-import { cleanup, Temporary } from "./temporary-stuff";
+import { append, Component, Effect, marker, mount } from './component';
+import { elem } from './elem';
+import { noop } from './function-stuff';
+import { mat4 } from './mat4';
+import { cleanup, Temporary } from './temporary-stuff';
 
 
 /** Create a shader of the given type from source. */
 function shader(gl: WebGLRenderingContext, type: number, source: string) {
   const s = gl.createShader(type);
   if (!s) {
-    console.error("Couldn't create shader.");
+    console.error('Create shader failed.');
     return;
   }
   gl.shaderSource(s, source);
   gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-    console.error("Couldn't compile shader: " + gl.getShaderInfoLog(s));
+    console.error('Compile shader failed: ' + gl.getShaderInfoLog(s));
     gl.deleteShader(s);
     return;
   }
@@ -30,14 +30,14 @@ export function shaderProgram(gl: WebGLRenderingContext, vsSource: string, fsSou
 
   const p = gl.createProgram();
   if (!p || !vertexShader || !fragmentShader) {
-    console.error("Couldn't create shader program.");
+    console.error('Create shader program failed.');
     return;
   }
   gl.attachShader(p, vertexShader);
   gl.attachShader(p, fragmentShader);
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-    console.error("Couldn't link shader program: " + gl.getProgramInfoLog(p));
+    console.error('Link shader program failed: ' + gl.getProgramInfoLog(p));
     return;
   }
 
@@ -45,15 +45,15 @@ export function shaderProgram(gl: WebGLRenderingContext, vsSource: string, fsSou
 }
 
 export const fillWebGlCanvas = (...fx: Temporary<HTMLCanvasElement>[]): Effect => p => {
-  const c = elem("canvas");
+  const c = elem('canvas');
   c.width = 100;
   c.height = 100;
-  c.style.position = "absolute";
-  c.style.top = "0";
-  c.style.left = "0";
-  const gl = c.getContext("webgl");
+  c.style.position = 'absolute';
+  c.style.top = '0';
+  c.style.left = '0';
+  const gl = c.getContext('webgl');
   if (!gl) {
-    console.error("WebGL unavailable.");
+    console.error('WebGL unavailable.');
     return noop;
   }
 

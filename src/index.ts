@@ -1,28 +1,28 @@
-import { Emitter } from "./apps/Emitter";
-import { Finder } from "./apps/Finder";
-import { PreferredNetworks } from "./apps/PreferredNetworks";
-import { Quantities } from "./apps/Quantities";
-import { binsert } from "./bsearch";
-import { Component, delayedComponent, domEvent, Effect, mount, render } from "./component";
-import { connect } from "./connection";
-import { Data, DataStore, Quantity, Time } from "./data-stuff";
-import { desktop } from "./desktop";
-import { children, div, divr, style } from "./div";
-import { elem } from "./elem";
-import { noop } from "./function-stuff";
-import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from "./mat4";
-import { menu, menuItem, menuSeparator } from "./menu";
-import { posaphore } from "./posaphore";
-import { deferred, join, just, map, square, state, stream, Stream, time, zip } from "./stream-stuff";
-import { Cleanup, cleanup, cleanupFrom, empty, Temporary } from "./temporary-stuff";
-import { windowEnvironment } from "./window-stuff";
+import { Emitter } from './apps/Emitter';
+import { Finder } from './apps/Finder';
+import { PreferredNetworks } from './apps/PreferredNetworks';
+import { Quantities } from './apps/Quantities';
+import { binsert } from './bsearch';
+import { Component, delayedComponent, domEvent, Effect, mount, render } from './component';
+import { connect } from './connection';
+import { Data, DataStore, Quantity, Time } from './data-stuff';
+import { desktop } from './desktop';
+import { children, divr, style } from './div';
+import { elem } from './elem';
+import { noop } from './function-stuff';
+import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from './mat4';
+import { menu, menuItem, menuSeparator } from './menu';
+import { posaphore } from './posaphore';
+import { deferred, join, just, map, square, state, stream, Stream, time, zip } from './stream-stuff';
+import { Cleanup, cleanup, cleanupFrom, empty, Temporary } from './temporary-stuff';
+import { windowEnvironment } from './window-stuff';
 
-import { ScaleLinear, scaleLinear, ticks } from "d3";
-import { SimulationTimelineWindow, TimelineWindow } from "./timeline";
-import { SimpleWindow } from "./simple-window";
-import { fetchLf32, fetchLf64 } from "./fetching";
-import { SimulationsList } from "./SimulationsList";
-import { rawSlider, slider } from "./controls";
+import { ScaleLinear, scaleLinear, ticks } from 'd3';
+import { SimulationTimelineWindow, TimelineWindow } from './timeline';
+import { SimpleWindow } from './simple-window';
+import { fetchLf32, fetchLf64 } from './fetching';
+import { SimulationsList } from './SimulationsList';
+import { rawSlider, slider } from './controls';
 
 type Handler<T> = (x: T) => void;
 
@@ -56,14 +56,14 @@ function shaderProgram(gl: WebGLRenderingContext, vsSource: string, fsSource: st
 
   const p = gl.createProgram();
   if (!p || !vertexShader || !fragmentShader) {
-    console.error("Couldn't create shader program.");
+    console.error('Create shader program failed.');
     return;
   }
   gl.attachShader(p, vertexShader);
   gl.attachShader(p, fragmentShader);
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-    console.error("Couldn't link shader program: " + gl.getProgramInfoLog(p));
+    console.error('Link shader program failed: ' + gl.getProgramInfoLog(p));
     return;
   }
 
@@ -83,7 +83,7 @@ function shader(gl: WebGLRenderingContext, type: number, source: string) {
   gl.shaderSource(s, source);
   gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-    console.error("An error occurred compiling the shaders: " + gl.getShaderInfoLog(s));
+    console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(s));
     gl.deleteShader(s);
     return;
   }
@@ -100,9 +100,9 @@ interface Model extends GeometryModel {
 }
 
 function fetchModel(): Promise<Model> {
-  const vertices = fetch("/vertices.lf32").then(
+  const vertices = fetch('/vertices.lf32').then(
     r => r.arrayBuffer().then(b => new Float32Array(b)));
-  const faces = fetch("/faces.lu32").then(
+  const faces = fetch('/faces.lu32').then(
     r => r.arrayBuffer().then(b => new Uint32Array(b)));
   return Promise.all([vertices, faces]).then(
     ([vertices, faces]) => ({
@@ -216,11 +216,11 @@ function erosProgram(m: Model): GraphicsProgram {
     // Look up which attributes our shader program is using
     // for aVertexPosition, aVevrtexColor and also
     // look up uniform locations.
-    const positionAttribute = gl.getAttribLocation(program, "aVertexPosition");
-    const normalAttribute = gl.getAttribLocation(program, "aVertexNormal");
-    const orientationUniform = gl.getUniformLocation(program, "uOrientation")!;
-    const projectionMatrixUniform = gl.getUniformLocation(program, "uProjectionMatrix")!;
-    const modelViewMatrixUniform = gl.getUniformLocation(program, "uModelViewMatrix")!;
+    const positionAttribute = gl.getAttribLocation(program, 'aVertexPosition');
+    const normalAttribute = gl.getAttribLocation(program, 'aVertexNormal');
+    const orientationUniform = gl.getUniformLocation(program, 'uOrientation')!;
+    const projectionMatrixUniform = gl.getUniformLocation(program, 'uProjectionMatrix')!;
+    const modelViewMatrixUniform = gl.getUniformLocation(program, 'uModelViewMatrix')!;
 
     const position = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
@@ -304,10 +304,10 @@ function dotsProgram(color: Stream<Vec3>): GraphicsProgram {
     const centersBuffer = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, centersBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, centers, gl.STATIC_DRAW);
-    const positionAttribute = gl.getAttribLocation(program, "center");
-    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
-    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
-    const colorUniform = gl.getUniformLocation(program, "color");
+    const positionAttribute = gl.getAttribLocation(program, 'center');
+    const projectionMatrixUniform = gl.getUniformLocation(program, 'projectionMatrix');
+    const modelViewMatrixUniform = gl.getUniformLocation(program, 'modelViewMatrix');
+    const colorUniform = gl.getUniformLocation(program, 'color');
     let lastColor: Float32Array;
     
     const draw = (modelViewMatrix: Mat4) => {
@@ -400,12 +400,12 @@ function axesProgram(): GraphicsProgram {
     const geoBuffer = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, geoBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, axes, gl.STATIC_DRAW);
-    const positionAttribute = gl.getAttribLocation(program, "position");
-    const dirAttribute = gl.getAttribLocation(program, "dir");
-    const colorAttribute = gl.getAttribLocation(program, "color");
-    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
-    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
-    const resolutionUniform = gl.getUniformLocation(program, "resolution");
+    const positionAttribute = gl.getAttribLocation(program, 'position');
+    const dirAttribute = gl.getAttribLocation(program, 'dir');
+    const colorAttribute = gl.getAttribLocation(program, 'color');
+    const projectionMatrixUniform = gl.getUniformLocation(program, 'projectionMatrix');
+    const modelViewMatrixUniform = gl.getUniformLocation(program, 'modelViewMatrix');
+    const resolutionUniform = gl.getUniformLocation(program, 'resolution');
     const draw = (modelViewMatrix: Mat4) => {
       // Tell WebGL to use our program when drawing
       gl.useProgram(program);
@@ -478,12 +478,12 @@ function orbitProgram(url: string, color: Vec3): GraphicsProgram {
       gl.bindBuffer(gl.ARRAY_BUFFER, dataBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, x, gl.STATIC_DRAW);
     });
-    const timeAttribute = gl.getAttribLocation(program, "aTime");
-    const positionAttribute = gl.getAttribLocation(program, "position");
-    const projectionMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
-    const modelViewMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
-    const colorUniform = gl.getUniformLocation(program, "color");
-    const timeUniform = gl.getUniformLocation(program, "time");
+    const timeAttribute = gl.getAttribLocation(program, 'aTime');
+    const positionAttribute = gl.getAttribLocation(program, 'position');
+    const projectionMatrixUniform = gl.getUniformLocation(program, 'projectionMatrix');
+    const modelViewMatrixUniform = gl.getUniformLocation(program, 'modelViewMatrix');
+    const colorUniform = gl.getUniformLocation(program, 'color');
+    const timeUniform = gl.getUniformLocation(program, 'time');
     const tofs = 0; // Math.random() * 1e7;
     
     const draw = (modelViewMatrix: Mat4) => {
@@ -528,9 +528,9 @@ function runAnimation(f: FrameRequestCallback) {
   return () => cancelAnimationFrame(afr);
 }
 
-const glApp = (model: Model) => SimpleWindow("WebGL", r => {
-  const container = elem("div");
-  const canvas = elem("canvas");
+const glApp = (model: Model) => SimpleWindow('WebGL', r => {
+  const container = elem('div');
+  const canvas = elem('canvas');
   canvas.width = 100;
   canvas.height = 100;
   container.style.width = '100%';
@@ -539,18 +539,18 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
   canvas.style.top = '0';
   canvas.style.left = '0';
   container.appendChild(canvas);
-  const gl = canvas.getContext("webgl");
+  const gl = canvas.getContext('webgl');
 
   if (!gl) {
-    console.error("Could get WebGL context.");
+    console.error('Could get WebGL context.');
     return noop;
   }
-  if (!gl.getExtension("OES_element_index_uint")) {
-    console.error("Missing required extension (OES_element_index_uint).");
+  if (!gl.getExtension('OES_element_index_uint')) {
+    console.error('Missing required extension (OES_element_index_uint).');
     return noop;
   }
-  if (!gl.getExtension("WEBGL_depth_texture")) {
-    console.error("Missing required extension (WEBGL_depth_texture).");
+  if (!gl.getExtension('WEBGL_depth_texture')) {
+    console.error('Missing required extension (WEBGL_depth_texture).');
     return noop;
   }
 
@@ -633,14 +633,14 @@ const glApp = (model: Model) => SimpleWindow("WebGL", r => {
     // dotsProgram(dc)(gl, register, projectionMatrix, resolution),
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
-    // orbitProgram("/orbit-cart-1-gaf.lf32", vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
-    orbitProgram("http://localhost/uextrap/orbit-cart.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
-    // orbitProgram("/orbit-cart-1.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
-    // orbitProgram("/orbit-cart.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
-    // orbitProgram("/orbit-kep.lf32", vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
-    // orbitProgram("/orbit-qns.lf32", vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
+    // orbitProgram('/orbit-cart-1-gaf.lf32', vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
+    orbitProgram('http://localhost/uextrap/orbit-cart.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    // orbitProgram('/orbit-cart-1.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
+    // orbitProgram('/orbit-cart.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
+    // orbitProgram('/orbit-kep.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    // orbitProgram('/orbit-qns.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     mount(container, r),
-    domEvent("wheel", e => {
+    domEvent('wheel', e => {
       e.preventDefault();
       e.stopPropagation();
       const { deltaX, deltaY } = e;
@@ -1015,17 +1015,17 @@ const Plot2D = (
 };
 
 const FillLayer = (
-  style: Partial<StreamableCSS>,
-  children?: ElementThing[],
+  css: Partial<StreamableCSS>,
+  kids?: ElementThing[],
   effects?: Effect[]
-) => div({
+) => divr(style({
   position: 'absolute',
   width: '100%',
   height: '100%',
   top: '0',
   left: '0',
-  ...style,
-}, children, effects);
+  ...css,
+}), kids && children(...kids), ...effects || []);
 
 function FillDragRegion(h: Handler<MouseEvent>) {
   return FillLayer({ zIndex: '0' }, [], [domEvent('mousedown', h)]);
@@ -1045,22 +1045,22 @@ function AddClass(s: string): Effect {
   };
 }
 
-const Pane = (color: string, children?: ElementThing[]) => div({
+const Pane = (color: string, kids?: ElementThing[]) => divr(style({
   width: '100%',
   height: '100%',
   backgroundColor: '#ffffff',
-}, children);
+}), children(...kids || []));
 
 const WhitePane = Pane('white');
 
-const Matte = (content: ElementThing) => div({
+const Matte = (content: ElementThing) => divr(style({
   width: '100%',
   height: '100%',
   backgroundColor: '#ffffff',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-}, [content]);
+}), children(content));
 
 // You create a window controller...
 // You can tell it to open windows.
@@ -1166,7 +1166,7 @@ const naiveDada2 = (a: Quantity, b: Quantity): PlotComponent => h => {
 const plot = (() => {
 const [xlim, setXlim] = state([0, 1] as Limits);
 const [ylim, setYlim] = state([0, 1] as Limits);
-const plot = SimpleWindow("Yooo", Plot2D(xlim, ylim, setXlim, setYlim, {
+const plot = SimpleWindow('Yooo', Plot2D(xlim, ylim, setXlim, setYlim, {
   requestRegion: onRequest,
   title: conn.quantityName(15).stream,
   drawers: [
@@ -1343,7 +1343,7 @@ const PointDistPlot = (url: string, index: number, mean: number, standardDeviati
 const pointDistPlotU =
   (url: string, index: number, mean: number, standardDeviation: number) =>
     addWindow(
-      SimpleWindow("Plot", PointDistPlot(url, index, mean, standardDeviation)),
+      SimpleWindow('Plot', PointDistPlot(url, index, mean, standardDeviation)),
       {x: 500, y: 500});
 
 const pointDistPlot = (index: number, mean: number, standardDeviation: number) =>
@@ -1507,12 +1507,12 @@ const CorrelationPlot = (): Component => {
       just(gaussianLine(6, 1, '#0099cc')),
     ],
   });
-  const win = SimpleWindow("Plot", plot);
+  const win = SimpleWindow('Plot', plot);
   addWindow(win, {x: 500, y: 500});
 }
 
-addWindow(SimpleWindow("Monte Carlo", MonteCarloSummary()), {x: 100, y: 100, width: 1000, height: 700});
-addWindow(SimpleWindow("Correlation", CorrelationPlot()), {x: 100, y: 100, width: 600, height: 400});
+addWindow(SimpleWindow('Monte Carlo', MonteCarloSummary()), {x: 100, y: 100, width: 1000, height: 700});
+addWindow(SimpleWindow('Correlation', CorrelationPlot()), {x: 100, y: 100, width: 600, height: 400});
 
 // filterErrorPlot('extrap', 'c00', 'C₀₀ (µ)');
 // filterErrorPlot('extrap', 'c20', 'C₂₀');
@@ -1574,7 +1574,7 @@ function scalarResidualPlot(sim: string, vari: string, title: string) {
         just(series({ t, y: v, width: 1.5 })),
       ]
     });
-    const win = SimpleWindow("Plot", plot);
+    const win = SimpleWindow('Plot', plot);
     addWindow(win, {x: 500, y: 500});
   });
 }
@@ -1647,7 +1647,7 @@ function filterErrorPlot(sim: string, vari: string, title: string, {
         `Est. std.: µ = ${fsVarMean.toPrecision(4)}, σ = ${fsVarStd.toPrecision(4)}`,
       ],
     });
-    const win = SimpleWindow("Plot", plot);
+    const win = SimpleWindow('Plot', plot);
     addWindow(win, {x: 500, y: 500});
   });
 }
@@ -1659,7 +1659,7 @@ function filterErrorPlot(sim: string, vari: string, title: string, {
     title: conn.quantityName(ns[0] || 0).stream,
     drawers: ns.map(dada),
   });
-  const win = SimpleWindow("Custom", plot);
+  const win = SimpleWindow('Custom', plot);
   addWindow(win);
 };
 
@@ -1694,6 +1694,6 @@ const rateLimit = <T>(s: Stream<T>): Stream<T> => h => {
       rateLimit(naiveDada2(x, y)),
     ],
   });
-  const win = SimpleWindow("Custom", plot);
+  const win = SimpleWindow('Custom', plot);
   addWindow(win);
 };

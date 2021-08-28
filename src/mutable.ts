@@ -1,5 +1,5 @@
-import { blank } from "./blank";
-import { Handler, Stream, stream } from "./stream-stuff";
+import { blank } from './blank';
+import { Handler, Stream, stream } from './stream-stuff';
 
 export type Streams<T> = { [K in keyof T]: Stream<T[K]> };
 export type Setters<T> = { [K in keyof T]: Handler<T[K]> };

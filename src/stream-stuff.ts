@@ -1,5 +1,5 @@
-import { noop, Thunk } from "./function-stuff";
-import { Cleanup, cleanup, empty, Temporary } from "./temporary-stuff";
+import { noop, Thunk } from './function-stuff';
+import { Cleanup, cleanup, empty, Temporary } from './temporary-stuff';
 
 export type Unsubscriber = () => void;
 export type Handler<T> = (x: T) => void;
@@ -250,7 +250,7 @@ export function enable<T = void>(s: Stream<boolean>, c: Temporary<T>): Temporary
   return streamComp(map(s, x => x ? c : empty));
 }
 
-/** Get the "current" value from a stream, if one is immediately available. */
+/** Get the 'current' value from a stream, if one is immediately available. */
 export function sample<T, S>(f: Stream<T>, init: S): T | S;
 export function sample<T, S>(f: Stream<T>, init?: S): T | S | undefined {
   let val: S | T | undefined = init;

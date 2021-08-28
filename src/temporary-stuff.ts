@@ -1,4 +1,4 @@
-import { noop } from "./function-stuff";
+import { noop } from './function-stuff';
 
 export type Cleanup = () => void;
 export type Temporary<T = void> = (x: T) => Cleanup;

@@ -1,18 +1,18 @@
-import { aniJoin, animatable, Animatable, AnimatableStream } from "./animatable";
-import { arrayChildren } from "./array-children";
-import { arrayMap, ArrayState, ArrayStream, length, move, MutableArray } from "./array-stuff";
-import { mutClick } from "./click-control";
-import { columnLayout } from "./column-layout";
-import { Component, domEvent, inputType, inputValue, render } from "./component";
-import { checkbox } from "./controls";
-import { children, div, rawInput, span, style, text } from "./div";
-import { focusHighlight } from "./focus-stuff";
-import { noop, Thunk } from "./function-stuff";
-import { oneHot } from "./one-hot";
-import { MutableState, state, Sync } from "./state";
-import { either, Handler, just, map, Stream, streamComp, unique } from "./stream-stuff";
-import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
-import { useDrag } from "./window-stuff";
+import { aniJoin, animatable, Animatable, AnimatableStream } from './animatable';
+import { arrayChildren } from './array-children';
+import { arrayMap, ArrayState, ArrayStream, length, move, MutableArray } from './array-stuff';
+import { mutClick } from './click-control';
+import { columnLayout } from './column-layout';
+import { Component, domEvent, inputType, inputValue, render } from './component';
+import { checkbox } from './controls';
+import { children, divr, rawInput, span, style, text } from './div';
+import { focusHighlight } from './focus-stuff';
+import { noop, Thunk } from './function-stuff';
+import { oneHot } from './one-hot';
+import { MutableState, state, Sync } from './state';
+import { either, Handler, just, map, Stream, streamComp, unique } from './stream-stuff';
+import { Cleanup, cleanup, Temporary } from './temporary-stuff';
+import { useDrag } from './window-stuff';
 
 function mapGrid<T, S>(src1: ArrayState<T>, src2: ArrayState<S>, fn: (a: T, b: S) => Cleanup): Cleanup {
   const active: Cleanup[][] = [];
@@ -74,13 +74,13 @@ function mapGrid<T, S>(src1: ArrayState<T>, src2: ArrayState<S>, fn: (a: T, b: S
 function tableHeader<T>(
   full: Stream<string>,
   cols: ArrayStream<TableColumn<T>>) {
-  return div({
-    height: "23px",
+  return divr(style({
+    height: '23px',
     minWidth: full,
-    background: "#2c2c2c",
-    borderBottom: "1px solid #484848",
-    display: "flex",
-  }, [], [arrayChildren(arrayMap(cols, c => tableHeaderCell(c.name, c.x, c.width, c.shiftWidth)))]);
+    background: '#2c2c2c',
+    borderBottom: '1px solid #484848',
+    display: 'flex',
+  }), arrayChildren(arrayMap(cols, c => tableHeaderCell(c.name, c.x, c.width, c.shiftWidth))));
 }
 
 type Offset = number;
@@ -100,20 +100,22 @@ interface Cell {
 }
 
 function tableDragger(shift: Handler<number>) {
-  return div({
-    position: "absolute",
-    top: "0",
-    right: "0",
-    bottom: "0",
-    padding: "3px 1px 3px 3px",
-    cursor: "col-resize",
-  }, [
-    div({
-      borderRight: "1px solid #484848",
-      height: "100%",
+  return divr(
+    style({
+      position: 'absolute',
+      top: '0',
+      right: '0',
+      bottom: '0',
+      padding: '3px 1px 3px 3px',
+      cursor: 'col-resize',
     }),
-  ], [
-    n => domEvent("mousedown", useDrag(e => {
+    children(
+      divr(style({
+        borderRight: '1px solid #484848',
+        height: '100%',
+      })),
+    ),
+    n => domEvent('mousedown', useDrag(e => {
       let last = e.clientX;
       return e => {
         const delta = e.clientX - last;
@@ -121,35 +123,35 @@ function tableDragger(shift: Handler<number>) {
         last = e.clientX;
       };
     }))(n),
-  ]);
+  );
 }
 
 function tableHeaderCell(label: string, x: AnimatableStream<Offset>, width: AnimatableStream<Width>, resize: Handler<Width>) {
-  return div({
-    position: "absolute",
-    top: "0",
-    left: "0",
-    height: "100%",
-    boxSizing: "border-box",
-    paddingLeft: "3px",
-    display: "flex",
-    flexFlow: "row nowrap",
-    alignItems: "center",
-    fontSize: "11px",
-    color: "#fff",
-  }, [
+  return divr(style({
+    position: 'absolute',
+    top: '0',
+    left: '0',
+    height: '100%',
+    boxSizing: 'border-box',
+    paddingLeft: '3px',
+    display: 'flex',
+    flexFlow: 'row nowrap',
+    alignItems: 'center',
+    fontSize: '11px',
+    color: '#fff',
+  }), children(
     label,
     tableDragger(resize),
-  ], [
+  ),
     n => width(([w, a]) => {
-      n.style.transition = a ? ".25s" : "0s";
+      n.style.transition = a ? '.25s' : '0s';
       n.style.width = `${w}px`;
     }),
     n => x(([x, a]) => {
-      n.style.transition = a ? ".25s" : "0s";
+      n.style.transition = a ? '.25s' : '0s';
       n.style.transform = `translate(${x}px, 0)`;
     }),
-  ]);
+  );
 }
 
 const aniTrans = (
@@ -157,36 +159,36 @@ const aniTrans = (
   y: AnimatableStream<number>,
 ): Temporary<ElementCSSInlineStyle> => n => aniJoin({ x, y })(([{ x, y }, a]) => {
   const { style } = n;
-  style.transition = a ? "transform .25s" : "transform 0s";
+  style.transition = a ? 'transform .25s' : 'transform 0s';
   style.transform = `translate(${x}px, ${y}px)`;
 });
 
-const basicCell = (...fx: Temporary<HTMLDivElement>[]): Cell => c => div({
-  position: "absolute",
-  top: "0",
-  left: "0",
-  color: "#fff",
-  background: either(c.selected, "#2357c9", "transparent"),
-  display: "flex",
-  flexFlow: "row nowrap",
-  alignItems: "center",
-  paddingLeft: "3px",
-  boxSizing: "border-box",
-  cursor: "default",
-  transition: "transform .25s",
-}, [], [
+const basicCell = (...fx: Temporary<HTMLDivElement>[]): Cell => c => divr(style({
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  color: '#fff',
+  background: either(c.selected, '#2357c9', 'transparent'),
+  display: 'flex',
+  flexFlow: 'row nowrap',
+  alignItems: 'center',
+  paddingLeft: '3px',
+  boxSizing: 'border-box',
+  cursor: 'default',
+  transition: 'transform .25s',
+}),
   mutClick(either(c.selected, undefined, c.select)),
   n => c.width(([x, a]) => {
-    n.style.transition = a ? ".25s" : "0s";
+    n.style.transition = a ? '.25s' : '0s';
     n.style.width = `${x}px`;
   }),
   n => c.height(([x, a]) => {
-    n.style.transition = a ? ".25s" : "0s";
+    n.style.transition = a ? '.25s' : '0s';
     n.style.height = `${x}px`;
   }),
   aniTrans(c.x, c.y),
   ...fx,
-]);
+);
 
 export const textCell = (label: string) => basicCell(children(label));
 
@@ -200,30 +202,30 @@ export const editableTextCell = (value: Sync<string>): Cell => {
   let pre: string;
   const input = rawInput(
     style({
-      position: "absolute",
-      top: "0",
-      left: "0",
-      right: "0",
-      bottom: "0",
-      border: "none",
-      outline: "none",
-      color: "#ffffff",
-      fontSize: "13px",
-      padding: "0 0 0 3px",
-      margin: "0",
-      background: "#202020",
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      right: '0',
+      bottom: '0',
+      border: 'none',
+      outline: 'none',
+      color: '#ffffff',
+      fontSize: '13px',
+      padding: '0 0 0 3px',
+      margin: '0',
+      background: '#202020',
     }),
-    inputType("text"),
+    inputType('text'),
     inputValue(value.stream),
     // TODO: Move this somewhere else so other text inputs can use it?
-    n => domEvent("keypress", e => {
-      if (e.key === "Enter") {
+    n => domEvent('keypress', e => {
+      if (e.key === 'Enter') {
         e.stopPropagation();
         e.preventDefault();
         n.blur();
       }
     })(n),
-    n => domEvent("blur", () => {
+    n => domEvent('blur', () => {
       n.value !== pre && value.set(n.value);
       setFocus(false);
     })(n),
@@ -235,7 +237,7 @@ export const editableTextCell = (value: Sync<string>): Cell => {
   );
   return c => {
     const nonInput = span(
-      style({ color: "#ffffff", fontSize: "13px" }),
+      style({ color: '#ffffff', fontSize: '13px' }),
       children(text(value.stream)),
       mutClick(either(c.selected, () => setFocus(true), undefined)),
     );
@@ -305,7 +307,7 @@ function tableRows<T>(source: ArrayStream<T>, selected: Stream<T>, select: Handl
       }
     },
     move(_, from, to) {
-      console.error("Move not implemented");
+      console.error('Move not implemented');
       rows.move(from, to);
     },
   });
@@ -359,7 +361,7 @@ function tableColumns<T>(fields: ArrayStream<Field<T>>) {
       cols.remove(i);
     },
     move() {
-      console.error("Move not supported!");
+      console.error('Move not supported!');
     }
   });
 
@@ -376,20 +378,20 @@ export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, se
 
   const fullHeight = map(length(data), x => x * rowStride);
 
-  return div({
-    border: "1px solid #565656",
-    background: "#202020",
-    overflowX: "scroll",
-  }, [
+  return divr(style({
+    border: '1px solid #565656',
+    background: '#202020',
+    overflowX: 'scroll',
+  }), children(
     tableHeader(fullPixels, cols.stream),
-    div({
-      overflowY: "scroll",
-      height: "110px",
+    divr(style({
+      overflowY: 'scroll',
+      height: '110px',
       minWidth: fullPixels,
-    }, [
-      div({
+    }), children(
+      divr(style({
         height: map(fullHeight, x => `${x}px`),
-      }, [], [
+      }),
         n => mapGrid(rows, cols, (r, c) => render(c.cell(r.value)({
           x: c.x,
           y: r.y,
@@ -398,10 +400,10 @@ export function table<T>(data: ArrayStream<T>, fields: ArrayStream<Field<T>>, se
           selected: r.selected,
           select: r.select,
         }), n)),
-      ]),
-    ], [
-      () => cleanupRows,
-      () => cleanupColumns,
-    ]),
-  ]);
+      ),
+    ),
+    _ => cleanupRows,
+    _ => cleanupColumns,
+    ),
+  ));
 }

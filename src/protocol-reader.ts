@@ -1,5 +1,5 @@
-import { Quantity, ValuePair } from "./data-stuff";
-import { Handler } from "./stream-stuff";
+import { Quantity, ValuePair } from './data-stuff';
+import { Handler } from './stream-stuff';
 
 type Message = ArrayBuffer;
 
@@ -16,7 +16,7 @@ export function protocolReader(h: ProtocolHandler): Handler<Message> {
   const td = new TextDecoder();
   return x => {
     if (x.byteLength < 1) {
-      console.warn("Discarding empty message.");
+      console.warn('Discarding empty message.');
       return;
     }
     const v = new DataView(x);
@@ -70,7 +70,7 @@ export function protocolReader(h: ProtocolHandler): Handler<Message> {
     if (handler) {
       handler(v);
     } else {
-      console.error("Unexpected message type", type);
+      console.error('Unexpected message type', type);
     }
   };
 }

@@ -1,21 +1,21 @@
-import { append, Component, domEvent, Effect, render, renderAt } from "./component";
-import { children, div, text } from "./div";
+import { append, Component, domEvent, Effect, render, renderAt } from './component';
+import { children, style, divr, text } from './div';
 
-import { ticks } from "d3";
-import { customState, Handler, join, just, map, sample, Stream, time, zip } from "./stream-stuff";
-import { ArrayHandler, arrayMap, ArrayStream } from "./array-stuff";
-import { state, State } from "./state";
-import { posaphore } from "./posaphore";
-import { Cleanup, cleanup, Temporary } from "./temporary-stuff";
-import { arrayChildren } from "./array-children";
-import { elem } from "./elem";
-import { shaderProgram } from "./web-gl";
-import { noop } from "./function-stuff";
-import { mat2, vec4 } from "./mat4";
-import { fetchLf32, fetchLf64 } from "./fetching";
-import { contentTitle, simpleTitleBar } from "./toolbar-bar";
-import { win, windowPane } from "./window-stuff";
-import { Frame } from "./frame";
+import { ticks } from 'd3';
+import { customState, Handler, join, just, map, sample, Stream, time, zip } from './stream-stuff';
+import { ArrayHandler, arrayMap, ArrayStream } from './array-stuff';
+import { state, State } from './state';
+import { posaphore } from './posaphore';
+import { Cleanup, cleanup, Temporary } from './temporary-stuff';
+import { arrayChildren } from './array-children';
+import { elem } from './elem';
+import { shaderProgram } from './web-gl';
+import { noop } from './function-stuff';
+import { mat2, vec4 } from './mat4';
+import { fetchLf32, fetchLf64 } from './fetching';
+import { contentTitle, simpleTitleBar } from './toolbar-bar';
+import { win, windowPane } from './window-stuff';
+import { Frame } from './frame';
 
 const lineProgram = (gl: WebGLRenderingContext) => shaderProgram(gl, `
   attribute float aX;
@@ -38,15 +38,15 @@ const pixels = (w: Stream<number>) => map(w, x => `${x}px`);
 const trackHeaderWidthPx = pixels(trackHeaderWidth);
 
 export const fillWebGlCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, maxY: number): Effect => p => {
-  const c = elem("canvas");
+  const c = elem('canvas');
   c.width = 100;
   c.height = 100;
-  c.style.position = "absolute";
-  c.style.top = "0";
-  c.style.left = "0";
-  const gl = c.getContext("webgl");
+  c.style.position = 'absolute';
+  c.style.top = '0';
+  c.style.left = '0';
+  const gl = c.getContext('webgl');
   if (!gl) {
-    console.error("WebGL unavailable.");
+    console.error('WebGL unavailable.');
     return noop;
   }
 
@@ -79,11 +79,11 @@ export const fillWebGlCanvas = (ctx: TimelineContext, series: Float32Array, minY
   gl.bindBuffer(gl.ARRAY_BUFFER, position);
   gl.bufferData(gl.ARRAY_BUFFER, series, gl.STATIC_DRAW);
 
-  const aX = gl.getAttribLocation(lp, "aX");
-  const aY = gl.getAttribLocation(lp, "aY");
-  const uColor = gl.getUniformLocation(lp, "uColor")!;
-  const uAff = gl.getUniformLocation(lp, "uAff")!;
-  const uOpacity = gl.getUniformLocation(lp, "uOpacity")!;
+  const aX = gl.getAttribLocation(lp, 'aX');
+  const aY = gl.getAttribLocation(lp, 'aY');
+  const uColor = gl.getUniformLocation(lp, 'uColor')!;
+  const uAff = gl.getUniformLocation(lp, 'uAff')!;
+  const uOpacity = gl.getUniformLocation(lp, 'uOpacity')!;
 
   let affMat = vec4(2, 2, -1, -1);
 
@@ -126,15 +126,15 @@ export const fillWebGlCanvas = (ctx: TimelineContext, series: Float32Array, minY
 };
 
 const posCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, maxY: number): Effect => p => {
-  const c = elem("canvas");
+  const c = elem('canvas');
   c.width = 100;
   c.height = 100;
-  c.style.position = "absolute";
-  c.style.top = "0";
-  c.style.left = "0";
-  const gl = c.getContext("webgl");
+  c.style.position = 'absolute';
+  c.style.top = '0';
+  c.style.left = '0';
+  const gl = c.getContext('webgl');
   if (!gl) {
-    console.error("WebGL unavailable.");
+    console.error('WebGL unavailable.');
     return noop;
   }
 
@@ -167,11 +167,11 @@ const posCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, max
   gl.bindBuffer(gl.ARRAY_BUFFER, position);
   gl.bufferData(gl.ARRAY_BUFFER, series, gl.STATIC_DRAW);
 
-  const aX = gl.getAttribLocation(lp, "aX");
-  const aY = gl.getAttribLocation(lp, "aY");
-  const uColor = gl.getUniformLocation(lp, "uColor")!;
-  const uAff = gl.getUniformLocation(lp, "uAff")!;
-  const uOpacity = gl.getUniformLocation(lp, "uOpacity")!;
+  const aX = gl.getAttribLocation(lp, 'aX');
+  const aY = gl.getAttribLocation(lp, 'aY');
+  const uColor = gl.getUniformLocation(lp, 'uColor')!;
+  const uAff = gl.getUniformLocation(lp, 'uAff')!;
+  const uOpacity = gl.getUniformLocation(lp, 'uOpacity')!;
 
   let affMat = vec4(2, 2, -1, -1);
 
@@ -216,15 +216,15 @@ const posCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, max
 };
 
 const uncertaintyCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, maxY: number): Effect => p => {
-  const c = elem("canvas");
+  const c = elem('canvas');
   c.width = 100;
   c.height = 100;
-  c.style.position = "absolute";
-  c.style.top = "0";
-  c.style.left = "0";
-  const gl = c.getContext("webgl");
+  c.style.position = 'absolute';
+  c.style.top = '0';
+  c.style.left = '0';
+  const gl = c.getContext('webgl');
   if (!gl) {
-    console.error("WebGL unavailable.");
+    console.error('WebGL unavailable.');
     return noop;
   }
 
@@ -271,11 +271,11 @@ const uncertaintyCanvas = (ctx: TimelineContext, series: Float32Array, minY: num
   gl.bufferData(gl.ARRAY_BUFFER, areaPos, gl.STATIC_DRAW);
   
 
-  const aX = gl.getAttribLocation(lp, "aX");
-  const aY = gl.getAttribLocation(lp, "aY");
-  const uColor = gl.getUniformLocation(lp, "uColor")!;
-  const uAff = gl.getUniformLocation(lp, "uAff")!;
-  const uOpacity = gl.getUniformLocation(lp, "uOpacity")!;
+  const aX = gl.getAttribLocation(lp, 'aX');
+  const aY = gl.getAttribLocation(lp, 'aY');
+  const uColor = gl.getUniformLocation(lp, 'uColor')!;
+  const uAff = gl.getUniformLocation(lp, 'uAff')!;
+  const uOpacity = gl.getUniformLocation(lp, 'uOpacity')!;
 
   let affMat = vec4(2, 2, -1, -1);
 
@@ -357,13 +357,13 @@ type Header = (width: Stream<string>) => Component;
 type Region = (ctx: TimelineContext) => Effect;
 type Track = (ctx: TimelineContext) => Component;
 
-const trackTitle = (title: string) => div({
+const trackTitle = (title: string) => divr(style({
   color: '#fff',
   fontSize: '14px',
   fontWeight: 'bold',
-}, [title]);
+}), children(title));
 
-const statLabel = (label: string, value: Stream<number | null>) => div({
+const statLabel = (label: string, value: Stream<number | null>) => divr(style({
   borderRadius: '8px',
   height: '16px',
   color: '#eee',
@@ -371,9 +371,9 @@ const statLabel = (label: string, value: Stream<number | null>) => div({
   backgroundColor: 'rgba(255, 255, 255, 0.15)',
   padding: '0 6px',
   display: 'flex',
-}, [label, text(map(value, x => x ? x.toPrecision(6) : '...'))]);
+}), children(label, text(map(value, x => x ? x.toPrecision(6) : '...'))));
 
-const simpleTrackHeader = (title: string, min?: Stream<number | null>, max?: Stream<number | null>): Header => width => div({
+const simpleTrackHeader = (title: string, min?: Stream<number | null>, max?: Stream<number | null>): Header => width => divr(style({
   width,
   height: '100%',
   padding: '10px',
@@ -384,24 +384,24 @@ const simpleTrackHeader = (title: string, min?: Stream<number | null>, max?: Str
   boxSizing: 'border-box',
   background: 'linear-gradient(#383838, #303030)',
   boxShadow: '0 1px 0 rgba(255, 255, 255, 0.15) inset, 0 -1px 0 rgba(0, 0, 0, 0.15) inset',
-}, [
+}), children(
   trackTitle(title),
   min != undefined && statLabel('Min ', min),
   max != undefined && statLabel('Max ', max),
-]);
+));
 
-const arbTrack = (header: Header, content: Region): Track => ctx => div({
-  height: "100px",
+const arbTrack = (header: Header, content: Region): Track => ctx => divr(style({
+  height: '100px',
   backgroundColor: '#222',
   boxShadow: '0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 -1px 0 rgba(0, 0, 0, 0.3) inset',
   display: 'flex',
   alignItems: 'stretch',
-}, [
+}), children(
   header(trackHeaderWidthPx),
-  div({
+  divr(style({
     flex: '1 0 0',
-  }, [], [content(ctx)]),
-]);
+  }), content(ctx)),
+));
 
 const trueTrack = (url: string): Track => ctx => {
   const data = fetchLf64(url);
@@ -507,7 +507,7 @@ const eventBubbles = (ctx: TimelineContext, series: Float32Array): Effect => p =
     offset: ctx.timeOffset,
   });
   const eventBubble = (time: number): Component => {
-    return div({
+    return divr(style({
       position: 'absolute',
       width: '12px',
       height: '12px',
@@ -519,7 +519,7 @@ const eventBubbles = (ctx: TimelineContext, series: Float32Array): Effect => p =
       left: map(timeStream, ({scale, offset}) => `${(time - offset) / scale}px`),
       top: '0',
       content: `${time}`,
-    });
+    }));
   };
 
   const us: Cleanup[] = [];
@@ -559,51 +559,51 @@ const timeAxis = (ctx: TimelineContext) => {
   const limits = map(time, ({scale, offset, width}) => [offset, offset + width * scale] as Limits);
   const ofs = map(time, ({scale, offset}) => -offset / scale);
   const ts = tickStream(limits);
-  return div({
+  return divr(style({
     flex: '1 0 0',
-  }, [
-    div({
-      height: "100%",
+  }), children(
+    divr(style({
+      height: '100%',
       transform: map(ofs, x => `translateX(${x}px)`),
-    }, [], [arrayChildren(arrayMap(ts, x =>
-      div({
-        position: "absolute",
-        height: "100%",
-        width: "1px",
-        borderLeft: "1px solid white",
+    }), arrayChildren(arrayMap(ts, x =>
+      divr(style({
+        position: 'absolute',
+        height: '100%',
+        width: '1px',
+        borderLeft: '1px solid white',
         transform: map(ctx.timeScale, m => `translateX(${x / m}px)`),
-      }, [
-        div({
-          transform: "translate(5px, 0)",
-          color: "#ffffff",
-          fontSize: "12px",
-        }, [text(just(`${x}`))]),
-      ])
-    )
-  )])]); 
+      }), children(
+        divr(style({
+          transform: 'translate(5px, 0)',
+          color: '#ffffff',
+          fontSize: '12px',
+        }), children(text(just(`${x}`)))),
+      ))
+    )))
+  ));
 }
 
 type Limits = [number, number];
 
-const headerHeader = () => div({
+const headerHeader = () => divr(style({
   width: trackHeaderWidthPx,
   background: 'linear-gradient(#383838, #303030)',
   boxShadow: '0 1px 0 rgba(255, 255, 255, 0.15) inset, 0 -1px 0 rgba(0, 0, 0, 0.15) inset',
-});
+}));
 
-const tracksArea = (tracks: Component[], onWheel: Handler<WheelEvent>) => div({
+const tracksArea = (tracks: Component[], onWheel: Handler<WheelEvent>) => divr(style({
   overflow: 'hidden scroll',
   flex: '1 0 0',
-}, tracks, [domEvent("wheel", onWheel)]);
+}), children(...tracks), domEvent('wheel', onWheel));
 
-const headerArea = (ctx: TimelineContext) => div({
+const headerArea = (ctx: TimelineContext) => divr(style({
   height: '25px',
   display: 'flex',
   alignItems: 'stretch',
-}, [
+}), children(
   headerHeader(),
   timeAxis(ctx),
-]);
+));
 
 export const Timeline = (frame: Stream<Frame>, ...tracks: Track[]) => {
   
@@ -626,12 +626,12 @@ export const Timeline = (frame: Stream<Frame>, ...tracks: Track[]) => {
   // biggest bundle. Peel off smaller things from that if needed.
   const left = 0;
   const tInvert = (p: number) => timeScale.value * (p - left) + timeOffset.value;
-  return div({
+  return divr(style({
     flex: '1 0 0',
     display: 'flex',
     flexFlow: 'column nowrap',
     backgroundColor: '#282828',
-  }, [
+  }), children(
     headerArea(context),
     tracksArea(
       tracks.map(x => x(context)),
@@ -658,7 +658,7 @@ export const Timeline = (frame: Stream<Frame>, ...tracks: Track[]) => {
         }
       },
     ),
-  ]);
+  ));
 };
 
 const SharedTimelineWindow = (title: string | Component, ...tracks: Track[]) =>
@@ -668,54 +668,54 @@ const SharedTimelineWindow = (title: string | Component, ...tracks: Track[]) =>
   ]));
 
 export const TimelineWindow = () =>
-  SharedTimelineWindow("Timeline",
-    defaultTrueTrack("g00"),
-    defaultUncertaintyTrack("g00"),
+  SharedTimelineWindow('Timeline',
+    defaultTrueTrack('g00'),
+    defaultUncertaintyTrack('g00'),
   );
 
 export const SimulationTimelineWindow = (sim: string) =>
   SharedTimelineWindow(contentTitle(sim),
     simCartTrack(sim),
-    simUncertaintyTrack(sim, "c00"),
-    simUncertaintyTrack(sim, "pos"),
-    simUncertaintyTrack(sim, "c00-sim1"),
-    simUncertaintyTrack(sim, "c00-sim2"),
-    simUncertaintyTrack(sim, "c00-sim3"),
-    simUncertaintyTrack(sim, "c00-sim4"),
-    simUncertaintyTrack(sim, "c00-sim5"),
-    simUncertaintyTrack(sim, "c00-sim6"),
-    simUncertaintyTrack(sim, "c00-sim7"),
-    simUncertaintyTrack(sim, "c00-sim8"),
-    simUncertaintyTrack(sim, "c00-sim9"),
-    simUncertaintyTrack(sim, "c00-sim10"),
-    simUncertaintyTrack(sim, "c00-sim11"),
-    simUncertaintyTrack(sim, "c00-sim12"),
-    // simUncertaintyTrack(sim, "c00-sim13"),
-    // simUncertaintyTrack(sim, "c00-sim14"),
-    // simUncertaintyTrack(sim, "c00-sim15"),
-    // simUncertaintyTrack(sim, "c00-sim16"),
-    // simUncertaintyTrack(sim, "c00-sim17"),
-    // simUncertaintyTrack(sim, "c00-sim18"),
-    // simUncertaintyTrack(sim, "c00-sim19"),
-    // simUncertaintyTrack(sim, "c00-sim20"),
-    // simUncertaintyTrack(sim, "c00-sim21"),
-    // simUncertaintyTrack(sim, "c00-sim22"),
-    // simUncertaintyTrack(sim, "c00-sim23"),
-    // simUncertaintyTrack(sim, "c00-sim24"),
-    // simUncertaintyTrack(sim, "c00-sim25"),
-    // simUncertaintyTrack(sim, "c00-sim26"),
-    // simUncertaintyTrack(sim, "c00-sim27"),
-    // simUncertaintyTrack(sim, "c00-sim28"),
-    // simUncertaintyTrack(sim, "c00-sim29"),
-    // simUncertaintyTrack(sim, "c00-sim30"),
-    // simUncertaintyTrack(sim, "c00-sim31"),
-    // simUncertaintyTrack(sim, "c00-sim32"),
-    // simUncertaintyTrack(sim, "c00-sim33"),
-    // simUncertaintyTrack(sim, "c00-sim34"),
-    // simUncertaintyTrack(sim, "c00-sim35"),
-    // simUncertaintyTrack(sim, "c00-sim36"),
-    // simUncertaintyTrack(sim, "c00-sim37"),
-    // simUncertaintyTrack(sim, "c00-sim38"),
-    // simUncertaintyTrack(sim, "c00-sim39"),
+    simUncertaintyTrack(sim, 'c00'),
+    simUncertaintyTrack(sim, 'pos'),
+    simUncertaintyTrack(sim, 'c00-sim1'),
+    simUncertaintyTrack(sim, 'c00-sim2'),
+    simUncertaintyTrack(sim, 'c00-sim3'),
+    simUncertaintyTrack(sim, 'c00-sim4'),
+    simUncertaintyTrack(sim, 'c00-sim5'),
+    simUncertaintyTrack(sim, 'c00-sim6'),
+    simUncertaintyTrack(sim, 'c00-sim7'),
+    simUncertaintyTrack(sim, 'c00-sim8'),
+    simUncertaintyTrack(sim, 'c00-sim9'),
+    simUncertaintyTrack(sim, 'c00-sim10'),
+    simUncertaintyTrack(sim, 'c00-sim11'),
+    simUncertaintyTrack(sim, 'c00-sim12'),
+    // simUncertaintyTrack(sim, 'c00-sim13'),
+    // simUncertaintyTrack(sim, 'c00-sim14'),
+    // simUncertaintyTrack(sim, 'c00-sim15'),
+    // simUncertaintyTrack(sim, 'c00-sim16'),
+    // simUncertaintyTrack(sim, 'c00-sim17'),
+    // simUncertaintyTrack(sim, 'c00-sim18'),
+    // simUncertaintyTrack(sim, 'c00-sim19'),
+    // simUncertaintyTrack(sim, 'c00-sim20'),
+    // simUncertaintyTrack(sim, 'c00-sim21'),
+    // simUncertaintyTrack(sim, 'c00-sim22'),
+    // simUncertaintyTrack(sim, 'c00-sim23'),
+    // simUncertaintyTrack(sim, 'c00-sim24'),
+    // simUncertaintyTrack(sim, 'c00-sim25'),
+    // simUncertaintyTrack(sim, 'c00-sim26'),
+    // simUncertaintyTrack(sim, 'c00-sim27'),
+    // simUncertaintyTrack(sim, 'c00-sim28'),
+    // simUncertaintyTrack(sim, 'c00-sim29'),
+    // simUncertaintyTrack(sim, 'c00-sim30'),
+    // simUncertaintyTrack(sim, 'c00-sim31'),
+    // simUncertaintyTrack(sim, 'c00-sim32'),
+    // simUncertaintyTrack(sim, 'c00-sim33'),
+    // simUncertaintyTrack(sim, 'c00-sim34'),
+    // simUncertaintyTrack(sim, 'c00-sim35'),
+    // simUncertaintyTrack(sim, 'c00-sim36'),
+    // simUncertaintyTrack(sim, 'c00-sim37'),
+    // simUncertaintyTrack(sim, 'c00-sim38'),
+    // simUncertaintyTrack(sim, 'c00-sim39'),
     // simEventTrack(sim, 'meas'),
   );

@@ -1,6 +1,6 @@
-import { Stream, Handler, stream, map, cat } from "./stream-stuff";
-import { cleanup } from "./temporary-stuff";
-import { posaphore } from "./posaphore";
+import { Stream, Handler, stream, map, cat } from './stream-stuff';
+import { cleanup } from './temporary-stuff';
+import { posaphore } from './posaphore';
 
 export function oneHot<T>(s: Stream<T | undefined>): (x: T) => Stream<boolean> {
   let curr: T | undefined;

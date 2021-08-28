@@ -1,9 +1,9 @@
-import { borderOverlay } from "./appearance-stuff";
-import { Component, Effect } from "./component";
-import { div, ElementThing } from "./div";
-import { Frame } from "./frame";
-import { ident, Thunk } from "./function-stuff";
-import { Handler, just, map, merge, state, stream, Stream } from "./stream-stuff";
+import { borderOverlay } from './appearance-stuff';
+import { Component, Effect } from './component';
+import { children, divr, ElementThing, style } from './div';
+import { Frame } from './frame';
+import { ident, Thunk } from './function-stuff';
+import { Handler, just, map, merge, state, stream, Stream } from './stream-stuff';
 
 export interface WindowHandles {
   top: Handler<MouseEvent>;
@@ -27,7 +27,7 @@ export interface WindowControls {
 }
 
 export function windowPane(content?: ElementThing[], effects?: Effect[]) {
-  return div({
+  return divr(style({
     backgroundColor: '#323334',
     borderRadius: '5px',
     overflow: 'hidden',
@@ -39,7 +39,7 @@ export function windowPane(content?: ElementThing[], effects?: Effect[]) {
     alignItems: 'stretch',
     width: '100%',
     height: '100%',
-  }, [...(content || []), borderOverlay], effects);
+  }), children(...(content || []), borderOverlay), ...effects || []);
 }
 
 export type Window = (c: WindowControls) => Component;
