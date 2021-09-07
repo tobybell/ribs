@@ -690,7 +690,7 @@ interface PlotOptions {
   // onYOffsetChange
 }
 
-type Series = Data & { color?: string, width?: number, points?: boolean };
+type Series = Data & { color?: string | string[], width?: number, points?: boolean };
 
 const Plot2D = (
   xlim: Stream<Limits>,
@@ -1305,19 +1305,23 @@ const seriesFromUrl = (url: string) => fetchLf32(url).then(x => {
 const series = (x: Series, yOffset = 0): PlotDrawer => ({ctx, xs, ys}) => {
   const {t: dx, y: dy, color = '#2965CC', width = 1, points = false} = x;
   const N = dx.length;
+  const singleColor = !Array.isArray(color) && color;
+  const colors = Array.isArray(color) && color;
   if (points) {
-    ctx.fillStyle = color;
+    singleColor && (ctx.fillStyle = singleColor);
     for (let i = 1; i <= N; i += 1) {
+      colors && (ctx.fillStyle = colors[i]);
       ctx.beginPath();
       ctx.ellipse(xs(dx[i]), ys(dy[i]) + yOffset, width, width, 0, 0, 2 * Math.PI);
       ctx.fill();
     }
   } else {
-    ctx.strokeStyle = color;
+    singleColor && (ctx.strokeStyle = singleColor);
     ctx.lineWidth = width;
     ctx.beginPath();
     ctx.moveTo(xs(dx[0]), ys(dy[0]) + yOffset);
     for (let i = 1; i <= N; i += 1) {
+      colors && (ctx.strokeStyle = colors[i]);
       ctx.lineTo(xs(dx[i]), ys(dy[i]) + yOffset);
     }
     ctx.stroke();
@@ -1472,14 +1476,35 @@ const MonteCarloSummary = (): Component => {
 };
 
 const CorrelationPlot = (): Component => {
-  const data = fetchLf32(`http://localhost/truth-corr/corr.lf32`).then(data => {
+  const correlation = fetchLf32(`http://localhost/truth-corr/corr.lf32`);
+  const magnitude = fetchLf32(`http://localhost/truth-corr/magnitude.lf32`);
+
+  const redBlueColorScale = (min: number, max: number) => {
+    const spread = max - min;
+    return (magnitude: number) => {
+      const t = Math.min(1, Math.max(0, (magnitude - min) / spread));
+      const red = Math.round(t * 255);
+      const blue = Math.round((1 - t) * 255);
+
+      const hex = (x: number) => {
+        const s = x.toString(16);
+        return s.length < 2 ? '0' + s : s;
+      };
+      return `#${hex(red)}00${hex(blue)}`;
+    };
+  };
+
+  const data = Promise.all([correlation, magnitude]).then(([data, magnitude]) => {
     const ig: number[] = [];
     const err: number[] = [];
-    for (let i = 0; i < data.length; i += 2) {
-      ig.push(data[i]);
-      err.push(data[i + 1]);
+    const color: string[] = [];
+    const colorScale = redBlueColorScale(Math.min(...magnitude), Math.max(...magnitude));
+    for (let i = 0; i < magnitude.length; i += 1) {
+      ig.push(data[2 * i]);
+      err.push(data[2 * i + 1]);
+      color.push(colorScale(magnitude[i]));
     }
-    return series({ t: ig, y: err, points: true, color: '#0088ff' });
+    return series({ t: ig, y: err, points: true, color });
   });
 
 
