@@ -7,7 +7,7 @@ import { caretDownIcon, caretRightIcon, sidebarDesktopFolderIcon, sidebarDocumen
 import { menu, menuItem, menuSeparator } from '../menu';
 import { oneHot } from '../one-hot';
 import { state, Sync } from '../state';
-import { Handler, just, map, Stream, streamComp } from '../stream-stuff';
+import { Handler, just, map, Stream, latest } from '../stream-stuff';
 import { toolbarBar } from '../toolbar-bar';
 import { win, windowPane } from '../window-stuff';
 
@@ -54,8 +54,8 @@ function item({ title, icon, level = 0, active = false, expanded = just(false), 
   const hasChildren = kids && kids.length > 0;
   const openCaret = caretDownIcon({ onClick: onCollapse });
   const closedCaret = caretRightIcon({ onClick: onExpand });
-  const carets = map(expanded, x => hasChildren
-    ? x ? openCaret : closedCaret : (r: Node) => mount(space(18), r));
+  const carets: Stream<Component> = map(expanded, x => hasChildren
+    ? x ? openCaret : closedCaret : r => r(space(18)));
 
   return divr(style({
     paddingTop: '2px',
@@ -69,7 +69,7 @@ function item({ title, icon, level = 0, active = false, expanded = just(false), 
       color: '#ffffff',
       backgroundColor: active ? 'rgba(255, 255, 255, .17)' : 'transparent',
     }), children(
-      streamComp(carets),
+      latest(carets),
       icon,
       space(5),
       title,

@@ -35,7 +35,7 @@ export function pathsIcon([width, height, paths]: IconDescriptor, defaultColor =
       });
       return cleanup(
         ...effects.map(f => f(svg)),
-        mount(svg, r),
+        r(svg),
       );
     }
   };

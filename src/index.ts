@@ -639,7 +639,7 @@ const glApp = (model: Model) => SimpleWindow('WebGL', r => {
     // orbitProgram('/orbit-cart.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-kep.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-qns.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
-    mount(container, r),
+    r(container),
     domEvent('wheel', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -1008,7 +1008,7 @@ const Plot2D = (
       cleanups.push(axisConfig(drawAxes));
     }
 
-    cleanups.push(mount(container, r));
+    cleanups.push(r(container));
 
     return cleanup(...cleanups);
   };

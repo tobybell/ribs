@@ -238,16 +238,13 @@ export const trigger = (s: Stream<boolean>, f: Temporary) => {
   };
 };
 
-export const streamComp = <T>(s: Stream<Temporary<T>>): Temporary<T> => r => {
+export const latest = <T>(s: Stream<Temporary<T>>): Temporary<T> => h => {
   let old = noop;
-  return cleanup(
-    s(x => (old(), old = x(r))),
-    () => old(),
-  );
+  return cleanup(s(x => (old(), old = x(h))), () => old());
 };
 
 export function enable<T = void>(s: Stream<boolean>, c: Temporary<T>): Temporary<T> {
-  return streamComp(map(s, x => x ? c : empty));
+  return latest(map(s, x => x ? c : empty));
 }
 
 /** Get the 'current' value from a stream, if one is immediately available. */

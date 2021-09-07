@@ -56,11 +56,11 @@ export const fillWebGlCanvas = (ctx: TimelineContext, series: Float32Array, minY
       const { width, height } = entry.contentRect;
       const w = Math.floor(width);
       const h = Math.floor(height);
-      c.width = w;
-      c.height = h;
+      c.width = 2 * w;
+      c.height = 2 * h;
       c.style.width = `${w}px`;
       c.style.height = `${h}px`;
-      gl.viewport(0, 0, w, h);
+      gl.viewport(0, 0, 2 * w, 2 * h);
       draw();
     }
   });
@@ -144,11 +144,11 @@ const posCanvas = (ctx: TimelineContext, series: Float32Array, minY: number, max
       const { width, height } = entry.contentRect;
       const w = Math.floor(width);
       const h = Math.floor(height);
-      c.width = w;
-      c.height = h;
+      c.width = 2 * w;
+      c.height = 2 * h;
       c.style.width = `${w}px`;
       c.style.height = `${h}px`;
-      gl.viewport(0, 0, w, h);
+      gl.viewport(0, 0, 2 * w, 2 * h);
       draw();
     }
   });
@@ -234,11 +234,11 @@ const uncertaintyCanvas = (ctx: TimelineContext, series: Float32Array, minY: num
       const { width, height } = entry.contentRect;
       const w = Math.floor(width);
       const h = Math.floor(height);
-      c.width = w;
-      c.height = h;
+      c.width = 2 * w;
+      c.height = 2 * h;
       c.style.width = `${w}px`;
       c.style.height = `${h}px`;
-      gl.viewport(0, 0, w, h);
+      gl.viewport(0, 0, 2 * w, 2 * h);
       draw();
     }
   });

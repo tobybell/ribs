@@ -15,7 +15,7 @@ const element =
   const t = elem(e);
   return cleanup(
     ...effects.filter(exists).map(f => f(t)),
-    mount(t, r),
+    r(t),
   );
 }
 
@@ -63,6 +63,6 @@ export const text = (s: Stream<string>): Component => r => {
   const n = document.createTextNode('');
   return cleanup(
     s(x => n.textContent = x),
-    mount(n, r),
+    r(n),
   );
 };

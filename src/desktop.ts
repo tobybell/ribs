@@ -85,7 +85,7 @@ function windowFrame(
       style.zIndex = `${maxZIndex.value++}`;
     }));
 
-    debts.push(mount(div, r));
+    debts.push(r(div));
 
     return cleanup(...debts);
   };

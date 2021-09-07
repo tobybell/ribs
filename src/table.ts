@@ -10,7 +10,7 @@ import { focusHighlight } from './focus-stuff';
 import { noop, Thunk } from './function-stuff';
 import { oneHot } from './one-hot';
 import { MutableState, state, Sync } from './state';
-import { either, Handler, just, map, Stream, streamComp, unique } from './stream-stuff';
+import { either, Handler, just, map, Stream, latest, unique } from './stream-stuff';
 import { Cleanup, cleanup, Temporary } from './temporary-stuff';
 import { useDrag } from './window-stuff';
 
@@ -242,7 +242,7 @@ export const editableTextCell = (value: Sync<string>): Cell => {
       mutClick(either(c.selected, () => setFocus(true), undefined)),
     );
     return basicCell(
-      children(streamComp(either(focus, input, nonInput))),
+      children(latest(either(focus, input, nonInput))),
       focusHighlight(focus, false),
     )(c);
   };
