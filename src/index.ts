@@ -634,7 +634,7 @@ const glApp = (model: Model) => SimpleWindow('WebGL', r => {
     ep(gl, register, projectionMatrix, resolution),
     axesProgram()(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart-1-gaf.lf32', vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
-    orbitProgram('http://localhost/uextrap/orbit-cart.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    orbitProgram('http://localhost/posonly/orbit-cart.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart-1.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-kep.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
@@ -858,9 +858,6 @@ const Plot2D = (
         drawersChanged: void;
       }
 
-      // Whenever width changes, need to compute a new left and right.
-      // Whenever height changes, 
-
       const legendMargin = 10;
       const legendTopMargin = legendMargin;
       const legendRightMargin = legendMargin;
@@ -1006,6 +1003,7 @@ const Plot2D = (
       };
 
       cleanups.push(axisConfig(drawAxes));
+      changeDrawers();
     }
 
     cleanups.push(r(container));
@@ -1232,9 +1230,8 @@ render(dt, document.body);
 // addWindow(eApp);
 // addWindow(qApp);
 
-addWindow(
-  SimulationTimelineWindow('uextrap'),
-  { x: 300, y: 300, width: 1000, height: 700 });
+// This is the timeline-like window that uses too many WebGL canvases.
+// addWindow(SimulationTimelineWindow('uextrap'), { x: 300, y: 300, width: 1000, height: 700 });
 
 fetchModel().then(m => addWindow(glApp(m)));
 
@@ -1387,7 +1384,7 @@ const MonteCarloPlot = (idx: number, nUkfs: number): Component => {
     ([mean, std]) => gaussianLine(mean, std, '#00f', true));
   const scaleFactor = mleDist.then(
     ([_, stdDev]) => 1 / (stdDev * Math.sqrt(2 * Math.PI)));
-  const yLim = scaleFactor.then(sf => [-.25 * sf, 1.75 * sf] as const);
+  const yLim = scaleFactor.then(sf => [-.1, .35] as const);
 
   const data = fetchLf32(`http://localhost/mcig-${idx}/igain.lf32`).then(x => {
     const y = [...x.map(_ => 0)];
@@ -1416,6 +1413,7 @@ const MonteCarloPlot = (idx: number, nUkfs: number): Component => {
       counts[k] -= counts[k - 1];
     const bucketWidth = 1 / nBuckets * (max - min);
     return ({ctx, top, bottom, left, right, xMin, xMax, yMin, yMax}) => {
+      console.log(bottom - top, n, bucketWidth, yMax, yMin);
       const rectHeightScale = (bottom - top) / (n * bucketWidth * (yMax - yMin));
       ctx.fillStyle = 'rgba(200, 100, 0, 0.5)';
       let rectWidth = bucketWidth / (xMax - xMin) * (right - left);
@@ -1435,11 +1433,10 @@ const MonteCarloPlot = (idx: number, nUkfs: number): Component => {
 
   const plot = Plot2D(deferred(xlim), deferred(yLim), noop, noop, {
     title: `Orbit ${idx}`,
-    xLabel: 'Information gain (kb)',
+    xLabel: 'Information gain (b)',
     yLabel: 'Probability density',
     showXAxis: true,
-    xAxisScale: 1 / (1000 * Math.LN2),
-    yAxisScale: 1000 * Math.LN2,
+    xAxisScale: 1 / Math.LN2,
     drawers: [
       deferred(data.then(d => series(d, 8))),
       deferred(histogram),
@@ -1483,14 +1480,32 @@ const CorrelationPlot = (): Component => {
     const spread = max - min;
     return (magnitude: number) => {
       const t = Math.min(1, Math.max(0, (magnitude - min) / spread));
-      const red = Math.round(t * 255);
-      const blue = Math.round((1 - t) * 255);
+      const red = t;
+      const green = .5 * (1 - t);
+      const blue = 1 - t;
 
       const hex = (x: number) => {
-        const s = x.toString(16);
+        const s = Math.round(x * 255).toString(16);
         return s.length < 2 ? '0' + s : s;
       };
-      return `#${hex(red)}00${hex(blue)}`;
+      return `#${hex(red)}${hex(green)}${hex(blue)}`;
+    };
+  };
+
+  const emphasizeMinColorScale = (min: number, max: number) => {
+    const spread = max - min;
+    return (magnitude: number) => {
+      const t = Math.min(1, Math.max(0, (magnitude - min) / spread));
+      const t2 = Math.pow(1 - t, 4);
+      const red = t2;
+      const green = .5 * (1 - t2);
+      const blue = 1 - t2;
+
+      const hex = (x: number) => {
+        const s = Math.round(x * 255).toString(16);
+        return s.length < 2 ? '0' + s : s;
+      };
+      return `#${hex(red)}${hex(green)}${hex(blue)}`;
     };
   };
 
@@ -1498,7 +1513,7 @@ const CorrelationPlot = (): Component => {
     const ig: number[] = [];
     const err: number[] = [];
     const color: string[] = [];
-    const colorScale = redBlueColorScale(Math.min(...magnitude), Math.max(...magnitude));
+    const colorScale = emphasizeMinColorScale(Math.min(...magnitude), Math.max(...magnitude));
     for (let i = 0; i < magnitude.length; i += 1) {
       ig.push(data[2 * i]);
       err.push(data[2 * i + 1]);
@@ -1508,17 +1523,22 @@ const CorrelationPlot = (): Component => {
   });
 
 
-  const [xlim, setXlim] = state([190000, 195000] as const);
-  const [ylim, setYlim] = state([34800, 35200] as const);
+  const [xlim, setXlim] = state([0, 110] as const);
+  const [ylim, setYlim] = state([28000, 40000] as const);
   return Plot2D(xlim, ylim, setXlim, setYlim, {
-    xLabel: 'Information gain (kb)',
-    yLabel: 'Error (m³/s²)',
-    xAxisScale: 1 / (1000 * Math.LN2),
+    xLabel: 'Information gain (b)',
+    yLabel: 'Error × 1e-3 (m³/s²)',
+    xAxisScale: 1 / Math.LN2,
+    yAxisScale: 1 / 1000,
     drawers: [
       deferred(data),
     ],
   });
 };
+
+const sleep = (ms: number) => new Promise<void>(resolve => {
+  setTimeout(resolve, ms);
+});
 
 {
   const height = 0.4;
@@ -1537,7 +1557,7 @@ const CorrelationPlot = (): Component => {
 }
 
 addWindow(SimpleWindow('Monte Carlo', MonteCarloSummary()), {x: 100, y: 100, width: 1000, height: 700});
-addWindow(SimpleWindow('Correlation', CorrelationPlot()), {x: 100, y: 100, width: 600, height: 400});
+addWindow(SimpleWindow('Correlation', CorrelationPlot()), {x: 100, y: 100, width: 300, height: 200});
 
 // filterErrorPlot('extrap', 'c00', 'C₀₀ (µ)');
 // filterErrorPlot('extrap', 'c20', 'C₂₀');
