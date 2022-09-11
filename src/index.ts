@@ -3,7 +3,7 @@ import { Finder } from './apps/Finder';
 import { PreferredNetworks } from './apps/PreferredNetworks';
 import { Quantities } from './apps/Quantities';
 import { binsert } from './bsearch';
-import { Component, delayedComponent, domEvent, Effect, mount, render } from './component';
+import { Component, delayedComponent, domEvent, Effect, render } from './component';
 import { connect } from './connection';
 import { Data, DataStore, Quantity, Time } from './data-stuff';
 import { desktop } from './desktop';
@@ -13,16 +13,15 @@ import { noop } from './function-stuff';
 import { Mat4, mat4, quat, Vec2, Vec3, vec3 } from './mat4';
 import { menu, menuItem, menuSeparator } from './menu';
 import { posaphore } from './posaphore';
-import { deferred, join, just, map, square, state, stream, Stream, time, zip } from './stream-stuff';
-import { Cleanup, cleanup, cleanupFrom, empty, Temporary } from './temporary-stuff';
+import { deferred, join, just, map, state, stream, Stream, zip } from './stream-stuff';
+import { Cleanup, cleanup, cleanupFrom, Temporary } from './temporary-stuff';
 import { windowEnvironment } from './window-stuff';
 
 import { ScaleLinear, scaleLinear, ticks } from 'd3';
-import { SimulationTimelineWindow, TimelineWindow } from './timeline';
+import { SimulationTimelineWindow } from './timeline';
 import { SimpleWindow } from './simple-window';
-import { fetchLf32, fetchLf64 } from './fetching';
+import { fetchLf32 } from './fetching';
 import { SimulationsList } from './SimulationsList';
-import { rawSlider, slider } from './controls';
 
 type Handler<T> = (x: T) => void;
 
@@ -635,6 +634,7 @@ const glApp = (model: Model) => SimpleWindow('WebGL', r => {
     axesProgram()(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart-1-gaf.lf32', vec3(0, 1, 1))(gl, register, projectionMatrix, resolution),
     orbitProgram('http://localhost/posonly/orbit-cart.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
+    orbitProgram('http://localhost/posonly-controlled/orbit-cart.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart-1.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-cart.lf32', vec3(1, 0, 1))(gl, register, projectionMatrix, resolution),
     // orbitProgram('/orbit-kep.lf32', vec3(1, 1, 0))(gl, register, projectionMatrix, resolution),
@@ -1540,7 +1540,7 @@ const sleep = (ms: number) => new Promise<void>(resolve => {
   setTimeout(resolve, ms);
 });
 
-{
+const gaussianLinePlotWindow = () => {
   const height = 0.4;
   const plot = Plot2D(just([0, 20] as const), just([-.2 * height, 1.2 * height] as const), noop, noop, {
     title: 'Predicted value',
@@ -1552,9 +1552,10 @@ const sleep = (ms: number) => new Promise<void>(resolve => {
       just(gaussianLine(6, 1, '#0099cc')),
     ],
   });
-  const win = SimpleWindow('Plot', plot);
-  addWindow(win, {x: 500, y: 500});
-}
+  return SimpleWindow('Gaussian Line Plot', plot);
+};
+
+// addWindow(gaussianLinePlotWindow(), {x: 500, y: 500});
 
 addWindow(SimpleWindow('Monte Carlo', MonteCarloSummary()), {x: 100, y: 100, width: 1000, height: 700});
 addWindow(SimpleWindow('Correlation', CorrelationPlot()), {x: 100, y: 100, width: 300, height: 200});
